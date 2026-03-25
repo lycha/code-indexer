@@ -322,6 +322,28 @@ Database path resolution order: `--db` flag → `CODEINDEX_DB` env var → `.cod
 | `1`  | Completed with warnings (e.g. parse errors, unenriched nodes)  |
 | `2`  | Fatal error (e.g. ripgrep missing, DB locked, schema mismatch) |
 
+## Tips & Tricks
+
+**Broad queries return too few results from a specific module?** Lexical search ranks results by match density across the whole repo and returns `--top-k 10` by default. If you're looking for all nodes related to a common term, increase the limit:
+
+```bash
+index query "survey" --top-k 30
+```
+
+**Prefer specific identifiers over broad terms.** `index query "SurveyService"` is more precise than `index query "survey"` and will surface the exact class you need.
+
+**Use graph search to explore a node's neighbourhood.** Once you find a node of interest, trace its callers and callees:
+
+```bash
+index query "SurveyService.createSurvey" --type graph --depth 3
+```
+
+**Pipe structured output to other tools.** Non-TTY output defaults to JSON, so you can chain with `jq`:
+
+```bash
+index query "CartService" --format jsonl | jq '.qualified_name'
+```
+
 ## Development
 
 ```bash
