@@ -1,0 +1,228 @@
+{
+  "groupId": "parse-languages",
+  "testedAt": "2026-03-25T13:22:22.423300+00:00",
+  "isolation": {
+    "workspace": "/tmp/codeindex-parse-languages",
+    "dbPath": "/tmp/codeindex-parse-languages/.codeindex/isolated.db",
+    "repoRoot": "/Users/kjackowski/IdeaProjects/ai-os/code-indexer",
+    "missionDir": "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8",
+    "pathPrefix": "/Users/kjackowski/.factory/bin"
+  },
+  "toolsUsed": [
+    "Execute"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-PARSE-008",
+      "title": "Gitignore exclusion",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run index build on isolated workspace",
+          "expected": "Build executes parsing flow and populates DB with parse outputs/warnings per assertion",
+          "observed": "default run exit=0, stderr contains TODO=True"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-languages/build-default.stdout.txt",
+          "parsing/parse-languages/build-default.stderr.txt",
+          "parsing/parse-languages/build-default.exitcode.txt",
+          "parsing/parse-languages/build-token-64.stdout.txt",
+          "parsing/parse-languages/build-token-64.stderr.txt",
+          "parsing/parse-languages/build-token-64.exitcode.txt"
+        ],
+        "db": "parsing/parse-languages/db-check.json",
+        "network": "not_applicable_cli_local"
+      },
+      "issues": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    },
+    {
+      "id": "VAL-PARSE-009",
+      "title": "Syntax error handling",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run index build on isolated workspace",
+          "expected": "Build executes parsing flow and populates DB with parse outputs/warnings per assertion",
+          "observed": "default run exit=0, stderr contains TODO=True"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-languages/build-default.stdout.txt",
+          "parsing/parse-languages/build-default.stderr.txt",
+          "parsing/parse-languages/build-default.exitcode.txt",
+          "parsing/parse-languages/build-token-64.stdout.txt",
+          "parsing/parse-languages/build-token-64.stderr.txt",
+          "parsing/parse-languages/build-token-64.exitcode.txt"
+        ],
+        "db": "parsing/parse-languages/db-check.json",
+        "network": "not_applicable_cli_local"
+      },
+      "issues": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    },
+    {
+      "id": "VAL-PARSE-010",
+      "title": "Kotlin class and method extraction",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run index build on isolated workspace",
+          "expected": "Build executes parsing flow and populates DB with parse outputs/warnings per assertion",
+          "observed": "default run exit=0, stderr contains TODO=True"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-languages/build-default.stdout.txt",
+          "parsing/parse-languages/build-default.stderr.txt",
+          "parsing/parse-languages/build-default.exitcode.txt",
+          "parsing/parse-languages/build-token-64.stdout.txt",
+          "parsing/parse-languages/build-token-64.stderr.txt",
+          "parsing/parse-languages/build-token-64.exitcode.txt"
+        ],
+        "db": "parsing/parse-languages/db-check.json",
+        "network": "not_applicable_cli_local"
+      },
+      "issues": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    },
+    {
+      "id": "VAL-PARSE-011",
+      "title": "TypeScript class and function extraction",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run index build on isolated workspace",
+          "expected": "Build executes parsing flow and populates DB with parse outputs/warnings per assertion",
+          "observed": "default run exit=0, stderr contains TODO=True"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-languages/build-default.stdout.txt",
+          "parsing/parse-languages/build-default.stderr.txt",
+          "parsing/parse-languages/build-default.exitcode.txt",
+          "parsing/parse-languages/build-token-64.stdout.txt",
+          "parsing/parse-languages/build-token-64.stderr.txt",
+          "parsing/parse-languages/build-token-64.exitcode.txt"
+        ],
+        "db": "parsing/parse-languages/db-check.json",
+        "network": "not_applicable_cli_local"
+      },
+      "issues": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    },
+    {
+      "id": "VAL-PARSE-012",
+      "title": "Unsupported language warning",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run index build on isolated workspace",
+          "expected": "Build executes parsing flow and populates DB with parse outputs/warnings per assertion",
+          "observed": "default run exit=0, stderr contains TODO=True"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-languages/build-default.stdout.txt",
+          "parsing/parse-languages/build-default.stderr.txt",
+          "parsing/parse-languages/build-default.exitcode.txt",
+          "parsing/parse-languages/build-token-64.stdout.txt",
+          "parsing/parse-languages/build-token-64.stderr.txt",
+          "parsing/parse-languages/build-token-64.exitcode.txt"
+        ],
+        "db": "parsing/parse-languages/db-check.json",
+        "network": "not_applicable_cli_local"
+      },
+      "issues": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    },
+    {
+      "id": "VAL-PARSE-013",
+      "title": "Multi-language parsing in single directory",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run index build on isolated workspace",
+          "expected": "Build executes parsing flow and populates DB with parse outputs/warnings per assertion",
+          "observed": "default run exit=0, stderr contains TODO=True"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-languages/build-default.stdout.txt",
+          "parsing/parse-languages/build-default.stderr.txt",
+          "parsing/parse-languages/build-default.exitcode.txt",
+          "parsing/parse-languages/build-token-64.stdout.txt",
+          "parsing/parse-languages/build-token-64.stderr.txt",
+          "parsing/parse-languages/build-token-64.exitcode.txt"
+        ],
+        "db": "parsing/parse-languages/db-check.json",
+        "network": "not_applicable_cli_local"
+      },
+      "issues": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    },
+    {
+      "id": "VAL-PARSE-014",
+      "title": "Token limit option",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run index build on isolated workspace",
+          "expected": "Build executes parsing flow and populates DB with parse outputs/warnings per assertion",
+          "observed": "default run exit=0, stderr contains TODO=True"
+        },
+        {
+          "action": "Run index build --token-limit 64",
+          "expected": "Lower token limit changes chunking/node count compared to default",
+          "observed": "token run exit=0, stderr contains TODO=True"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-languages/build-default.stdout.txt",
+          "parsing/parse-languages/build-default.stderr.txt",
+          "parsing/parse-languages/build-default.exitcode.txt",
+          "parsing/parse-languages/build-token-64.stdout.txt",
+          "parsing/parse-languages/build-token-64.stderr.txt",
+          "parsing/parse-languages/build-token-64.exitcode.txt"
+        ],
+        "db": "parsing/parse-languages/db-check.json",
+        "network": "not_applicable_cli_local"
+      },
+      "issues": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Guidance file .factory/library/user-testing.md was not present at specified location.",
+      "resolved": true,
+      "resolution": "Proceeded using mission AGENTS.md and task-provided CLI guidance.",
+      "affectedAssertions": [
+        "VAL-PARSE-008",
+        "VAL-PARSE-009",
+        "VAL-PARSE-010",
+        "VAL-PARSE-011",
+        "VAL-PARSE-012",
+        "VAL-PARSE-013",
+        "VAL-PARSE-014"
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "description": "index build CLI command is currently a TODO stub and does not execute parsing.",
+      "affectedAssertions": [
+        "VAL-PARSE-008",
+        "VAL-PARSE-009",
+        "VAL-PARSE-010",
+        "VAL-PARSE-011",
+        "VAL-PARSE-012",
+        "VAL-PARSE-013",
+        "VAL-PARSE-014"
+      ],
+      "quickFixAttempted": "Executed build with default options and with --token-limit 64; both returned TODO output."
+    }
+  ],
+  "summary": "Tested 7 assertions: 0 passed, 0 failed, 7 blocked due to unimplemented CLI build surface."
+}

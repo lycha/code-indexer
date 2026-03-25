@@ -1,0 +1,273 @@
+{
+  "groupId": "parse-core",
+  "testedAt": "2026-03-25T13:22:26.058898+00:00",
+  "isolation": {
+    "repoRoot": "/Users/kjackowski/IdeaProjects/ai-os/code-indexer",
+    "workspace": "/tmp/codeindex-parse-core",
+    "dbPath": "/tmp/codeindex-parse-core/codeindex.db",
+    "pathPrefix": "/Users/kjackowski/.factory/bin",
+    "missionDir": "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8"
+  },
+  "toolsUsed": [
+    "execute",
+    "sqlite3",
+    "index CLI"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-PARSE-001",
+      "title": "Python class and method extraction",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db init --no-gitignore-update`",
+          "expected": "DB initialized and ready for parse/build flow",
+          "observed": "Migration applied successfully ([SETUP] Applied migration 001_initial.sql (v1))"
+        },
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db build --token-limit 30` on fixture sources",
+          "expected": "Parsing executes and populates nodes/files for assertion checks",
+          "observed": "CLI output: [TODO] build not yet implemented"
+        },
+        {
+          "action": "Inspect DB state with sqlite3",
+          "expected": "Parsed nodes/files available for validation",
+          "observed": "nodes count = 0, files count = 0"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-core/cli-init.txt",
+          "parsing/parse-core/cli-build-1.txt",
+          "parsing/parse-core/cli-build-2-unchanged.txt",
+          "parsing/parse-core/cli-build-3-after-change.txt",
+          "parsing/parse-core/sql-db-state.txt"
+        ],
+        "network": "n/a (CLI-only flow)",
+        "consoleErrors": "n/a (CLI-only flow)"
+      },
+      "issues": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    },
+    {
+      "id": "VAL-PARSE-002",
+      "title": "Node ID stability",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db init --no-gitignore-update`",
+          "expected": "DB initialized and ready for parse/build flow",
+          "observed": "Migration applied successfully ([SETUP] Applied migration 001_initial.sql (v1))"
+        },
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db build --token-limit 30` on fixture sources",
+          "expected": "Parsing executes and populates nodes/files for assertion checks",
+          "observed": "CLI output: [TODO] build not yet implemented"
+        },
+        {
+          "action": "Inspect DB state with sqlite3",
+          "expected": "Parsed nodes/files available for validation",
+          "observed": "nodes count = 0, files count = 0"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-core/cli-init.txt",
+          "parsing/parse-core/cli-build-1.txt",
+          "parsing/parse-core/cli-build-2-unchanged.txt",
+          "parsing/parse-core/cli-build-3-after-change.txt",
+          "parsing/parse-core/sql-db-state.txt"
+        ],
+        "network": "n/a (CLI-only flow)",
+        "consoleErrors": "n/a (CLI-only flow)"
+      },
+      "issues": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    },
+    {
+      "id": "VAL-PARSE-003",
+      "title": "Content hash computation",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db init --no-gitignore-update`",
+          "expected": "DB initialized and ready for parse/build flow",
+          "observed": "Migration applied successfully ([SETUP] Applied migration 001_initial.sql (v1))"
+        },
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db build --token-limit 30` on fixture sources",
+          "expected": "Parsing executes and populates nodes/files for assertion checks",
+          "observed": "CLI output: [TODO] build not yet implemented"
+        },
+        {
+          "action": "Inspect DB state with sqlite3",
+          "expected": "Parsed nodes/files available for validation",
+          "observed": "nodes count = 0, files count = 0"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-core/cli-init.txt",
+          "parsing/parse-core/cli-build-1.txt",
+          "parsing/parse-core/cli-build-2-unchanged.txt",
+          "parsing/parse-core/cli-build-3-after-change.txt",
+          "parsing/parse-core/sql-db-state.txt"
+        ],
+        "network": "n/a (CLI-only flow)",
+        "consoleErrors": "n/a (CLI-only flow)"
+      },
+      "issues": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    },
+    {
+      "id": "VAL-PARSE-004",
+      "title": "Files table upserted",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db init --no-gitignore-update`",
+          "expected": "DB initialized and ready for parse/build flow",
+          "observed": "Migration applied successfully ([SETUP] Applied migration 001_initial.sql (v1))"
+        },
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db build --token-limit 30` on fixture sources",
+          "expected": "Parsing executes and populates nodes/files for assertion checks",
+          "observed": "CLI output: [TODO] build not yet implemented"
+        },
+        {
+          "action": "Inspect DB state with sqlite3",
+          "expected": "Parsed nodes/files available for validation",
+          "observed": "nodes count = 0, files count = 0"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-core/cli-init.txt",
+          "parsing/parse-core/cli-build-1.txt",
+          "parsing/parse-core/cli-build-2-unchanged.txt",
+          "parsing/parse-core/cli-build-3-after-change.txt",
+          "parsing/parse-core/sql-db-state.txt"
+        ],
+        "network": "n/a (CLI-only flow)",
+        "consoleErrors": "n/a (CLI-only flow)"
+      },
+      "issues": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    },
+    {
+      "id": "VAL-PARSE-005",
+      "title": "Incremental skip on unchanged file",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db init --no-gitignore-update`",
+          "expected": "DB initialized and ready for parse/build flow",
+          "observed": "Migration applied successfully ([SETUP] Applied migration 001_initial.sql (v1))"
+        },
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db build --token-limit 30` on fixture sources",
+          "expected": "Parsing executes and populates nodes/files for assertion checks",
+          "observed": "CLI output: [TODO] build not yet implemented"
+        },
+        {
+          "action": "Inspect DB state with sqlite3",
+          "expected": "Parsed nodes/files available for validation",
+          "observed": "nodes count = 0, files count = 0"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-core/cli-init.txt",
+          "parsing/parse-core/cli-build-1.txt",
+          "parsing/parse-core/cli-build-2-unchanged.txt",
+          "parsing/parse-core/cli-build-3-after-change.txt",
+          "parsing/parse-core/sql-db-state.txt"
+        ],
+        "network": "n/a (CLI-only flow)",
+        "consoleErrors": "n/a (CLI-only flow)"
+      },
+      "issues": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    },
+    {
+      "id": "VAL-PARSE-006",
+      "title": "Enriched_at cleared on content change",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db init --no-gitignore-update`",
+          "expected": "DB initialized and ready for parse/build flow",
+          "observed": "Migration applied successfully ([SETUP] Applied migration 001_initial.sql (v1))"
+        },
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db build --token-limit 30` on fixture sources",
+          "expected": "Parsing executes and populates nodes/files for assertion checks",
+          "observed": "CLI output: [TODO] build not yet implemented"
+        },
+        {
+          "action": "Inspect DB state with sqlite3",
+          "expected": "Parsed nodes/files available for validation",
+          "observed": "nodes count = 0, files count = 0"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-core/cli-init.txt",
+          "parsing/parse-core/cli-build-1.txt",
+          "parsing/parse-core/cli-build-2-unchanged.txt",
+          "parsing/parse-core/cli-build-3-after-change.txt",
+          "parsing/parse-core/sql-db-state.txt"
+        ],
+        "network": "n/a (CLI-only flow)",
+        "consoleErrors": "n/a (CLI-only flow)"
+      },
+      "issues": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    },
+    {
+      "id": "VAL-PARSE-007",
+      "title": "cAST chunking of oversized function",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db init --no-gitignore-update`",
+          "expected": "DB initialized and ready for parse/build flow",
+          "observed": "Migration applied successfully ([SETUP] Applied migration 001_initial.sql (v1))"
+        },
+        {
+          "action": "Run `index --db /tmp/codeindex-parse-core/codeindex.db build --token-limit 30` on fixture sources",
+          "expected": "Parsing executes and populates nodes/files for assertion checks",
+          "observed": "CLI output: [TODO] build not yet implemented"
+        },
+        {
+          "action": "Inspect DB state with sqlite3",
+          "expected": "Parsed nodes/files available for validation",
+          "observed": "nodes count = 0, files count = 0"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "parsing/parse-core/cli-init.txt",
+          "parsing/parse-core/cli-build-1.txt",
+          "parsing/parse-core/cli-build-2-unchanged.txt",
+          "parsing/parse-core/cli-build-3-after-change.txt",
+          "parsing/parse-core/sql-db-state.txt"
+        ],
+        "network": "n/a (CLI-only flow)",
+        "consoleErrors": "n/a (CLI-only flow)"
+      },
+      "issues": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    }
+  ],
+  "frictions": [],
+  "blockers": [
+    {
+      "description": "`index build` command is a stub in this environment and does not run parser/mapper logic.",
+      "affectedAssertions": [
+        "VAL-PARSE-001",
+        "VAL-PARSE-002",
+        "VAL-PARSE-003",
+        "VAL-PARSE-004",
+        "VAL-PARSE-005",
+        "VAL-PARSE-006",
+        "VAL-PARSE-007"
+      ],
+      "quickFixAttempted": "Retried build across three scenarios (initial, unchanged rerun, file changed rerun); all returned `[TODO] build not yet implemented` and DB remained empty."
+    }
+  ],
+  "summary": "Tested 7 assigned parsing assertions. 0 passed, 0 failed, 7 blocked due to unimplemented `index build` CLI prerequisite."
+}

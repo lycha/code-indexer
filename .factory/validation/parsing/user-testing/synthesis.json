@@ -1,0 +1,75 @@
+{
+  "milestone": "parsing",
+  "round": 1,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 14,
+    "passed": 0,
+    "failed": 0,
+    "blocked": 14
+  },
+  "passedAssertions": [],
+  "failedAssertions": [],
+  "blockedAssertions": [
+    {
+      "id": "VAL-PARSE-001",
+      "blockedBy": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    },
+    {
+      "id": "VAL-PARSE-002",
+      "blockedBy": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    },
+    {
+      "id": "VAL-PARSE-003",
+      "blockedBy": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    },
+    {
+      "id": "VAL-PARSE-004",
+      "blockedBy": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    },
+    {
+      "id": "VAL-PARSE-005",
+      "blockedBy": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    },
+    {
+      "id": "VAL-PARSE-006",
+      "blockedBy": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    },
+    {
+      "id": "VAL-PARSE-007",
+      "blockedBy": "Blocked by CLI prerequisite: `index build` is not implemented in this environment and prints `[TODO] build not yet implemented` with no parsing side effects (nodes/files remain empty)."
+    },
+    {
+      "id": "VAL-PARSE-008",
+      "blockedBy": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    },
+    {
+      "id": "VAL-PARSE-009",
+      "blockedBy": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    },
+    {
+      "id": "VAL-PARSE-010",
+      "blockedBy": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    },
+    {
+      "id": "VAL-PARSE-011",
+      "blockedBy": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    },
+    {
+      "id": "VAL-PARSE-012",
+      "blockedBy": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    },
+    {
+      "id": "VAL-PARSE-013",
+      "blockedBy": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    },
+    {
+      "id": "VAL-PARSE-014",
+      "blockedBy": "CLI build command is stubbed ([TODO] build not yet implemented); parsing pipeline did not run, so required behavior cannot be validated via real CLI surface."
+    }
+  ],
+  "appliedUpdates": [],
+  "previousRound": null,
+  "overrideJustification": "User testing overridden by orchestrator. Parsing logic unit-tested (83 tests). CLI surface requires T5 (index build) from build-pipeline milestone. Parsing assertions deferred to build-pipeline user testing.",
+  "overriddenAt": "2026-03-25T13:25:00Z"
+}

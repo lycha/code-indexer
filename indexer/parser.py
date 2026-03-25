@@ -980,6 +980,7 @@ def parse_directory(
 
             if not nodes:
                 # Syntax error or empty file - parse_file already logged warning
+                warnings.append(f"Skipped: {rel_path}")
                 continue
 
             # Delete old nodes for this file
