@@ -1,0 +1,41 @@
+{
+  "milestone": "build-pipeline",
+  "round": 2,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "python3 -m pytest tests/ -v",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "echo \"No typecheck configured - pure Python project\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "python3 -m pytest tests/ -v --tb=short",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "failedFeatures": [
+      "fix-build-pipeline-scrutiny"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "fix-build-pipeline-scrutiny",
+      "severity": "blocking",
+      "description": "Could not spawn scrutiny-feature-reviewer subagent due permission gating ('Exec ended early: insufficient permission to proceed'). Re-review of fix feature could not be completed."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [],
+  "previousRound": ".factory/validation/build-pipeline/scrutiny/synthesis.json#round-1"
+}
