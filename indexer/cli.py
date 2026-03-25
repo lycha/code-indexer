@@ -134,7 +134,7 @@ def build(ctx: click.Context, phase: str | None, token_limit: int, exclude: tupl
 
         # Phase 1: Parse
         click.echo("[PHASE 1] Parsing source files...", err=True)
-        warnings = parse_directory(repo_root, conn, token_limit=token_limit)
+        warnings = parse_directory(repo_root, conn, token_limit=token_limit, exclude_patterns=list(exclude) if exclude else None)
         if warnings:
             for w in warnings:
                 click.echo(f"[WARNING] {w}", err=True)

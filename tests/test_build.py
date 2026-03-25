@@ -138,6 +138,7 @@ class TestBuildExitCodes:
         # have already printed the warning via parse_file. Check that
         # stderr has a WARNING about skipped file.
         assert "[WARNING]" in result.stderr
+        assert result.returncode == 1
 
     def test_exit_2_ripgrep_not_found(self, fixture_repo):
         """When rg is not on PATH, exit 2."""

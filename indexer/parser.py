@@ -932,6 +932,7 @@ def parse_directory(
     repo_root: Path,
     conn: Any,
     token_limit: int = 512,
+    exclude_patterns: list[str] | None = None,
 ) -> list[str]:
     """Walk directory, detect language, parse .py files. Returns list of warnings.
 
@@ -941,6 +942,8 @@ def parse_directory(
     repo_root = Path(repo_root)
     warnings: list[str] = []
     gitignore_patterns = _load_gitignore_patterns(repo_root)
+    if exclude_patterns:
+        gitignore_patterns.extend(exclude_patterns)
 
     for dirpath, dirnames, filenames in os.walk(repo_root):
         # Skip hidden directories and __pycache__

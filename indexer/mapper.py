@@ -74,6 +74,7 @@ def _classify_edge_type(source_node: dict, target_node_id: str, identifier: str,
 
     Heuristic classification:
     - imports: source is a file node
+    - overrides: source and target are both methods with the same name but different qualified_names
     - inherits: target is a class/interface and source is a class
     - instantiates: target is a class and source is a function/method
     - calls: target is a function/method
@@ -81,16 +82,25 @@ def _classify_edge_type(source_node: dict, target_node_id: str, identifier: str,
     """
     # Get target node info
     row = conn.execute(
-        "SELECT node_type FROM nodes WHERE id = ?", (target_node_id,)
+        "SELECT node_type, name, qualified_name FROM nodes WHERE id = ?", (target_node_id,)
     ).fetchone()
     if not row:
         return "references"
     target_type = row[0]
+    target_name = row[1]
+    target_qname = row[2]
 
     src_type = source_node["node_type"]
 
     if src_type == "file":
         return "imports"
+
+    # Check for method override: both are methods, same name, different qualified_names
+    if src_type == "method" and target_type == "method":
+        src_name = source_node.get("name", "")
+        src_qname = source_node.get("qualified_name", "")
+        if src_name == target_name and src_qname != target_qname:
+            return "overrides"
 
     if target_type in ("class", "interface") and src_type in ("class", "interface"):
         return "inherits"
@@ -246,11 +256,11 @@ def map_dependencies(changed_node_ids: list[str], conn, repo_root: str) -> int:
                 # source_node_id is where the identifier appears (the caller)
                 # node["id"] is where the identifier is defined (the callee)
                 source_info = conn.execute(
-                    "SELECT node_type FROM nodes WHERE id = ?", (source_node_id,)
+                    "SELECT node_type, name, qualified_name FROM nodes WHERE id = ?", (source_node_id,)
                 ).fetchone()
                 if not source_info:
                     continue
-                source_dict = {"node_type": source_info[0]}
+                source_dict = {"node_type": source_info[0], "name": source_info[1], "qualified_name": source_info[2]}
                 edge_type = _classify_edge_type(source_dict, node["id"], identifier, conn)
 
                 try:

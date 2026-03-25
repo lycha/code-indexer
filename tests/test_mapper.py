@@ -180,6 +180,48 @@ class TestRebuildFTS:
         assert rows[0][0] == "a.py::function::foo"
 
 
+class TestOverridesEdgeType:
+    """Test 'overrides' edge type classification for method overrides."""
+
+    def test_overrides_detected_for_same_name_methods(self, db_conn):
+        """Methods with same name but different qualified_names classified as 'overrides'."""
+        from indexer.mapper import _classify_edge_type
+
+        # Parent class method
+        _insert_node(db_conn, "a.py::method::Base.process", "a.py", "method",
+                     "process", "Base.process", 5, 10)
+        # Child class method with same name
+        _insert_node(db_conn, "a.py::method::Child.process", "a.py", "method",
+                     "process", "Child.process", 15, 20)
+
+        source = {"node_type": "method", "name": "process", "qualified_name": "Child.process"}
+        edge_type = _classify_edge_type(source, "a.py::method::Base.process", "process", db_conn)
+        assert edge_type == "overrides"
+
+    def test_no_override_for_different_names(self, db_conn):
+        """Methods with different names are not classified as 'overrides'."""
+        from indexer.mapper import _classify_edge_type
+
+        _insert_node(db_conn, "a.py::method::Base.process", "a.py", "method",
+                     "process", "Base.process", 5, 10)
+
+        source = {"node_type": "method", "name": "handle", "qualified_name": "Child.handle"}
+        edge_type = _classify_edge_type(source, "a.py::method::Base.process", "process", db_conn)
+        assert edge_type == "calls"  # falls through to calls since target is method
+
+    def test_no_override_for_same_qualified_name(self, db_conn):
+        """Same qualified_name means same method, not an override."""
+        from indexer.mapper import _classify_edge_type
+
+        _insert_node(db_conn, "a.py::method::Base.process", "a.py", "method",
+                     "process", "Base.process", 5, 10)
+
+        source = {"node_type": "method", "name": "process", "qualified_name": "Base.process"}
+        edge_type = _classify_edge_type(source, "a.py::method::Base.process", "process", db_conn)
+        # Same qualified name - not an override, falls through to calls
+        assert edge_type == "calls"
+
+
 class TestRipgrepNotFound:
     """Test ripgrep not found error."""
 
