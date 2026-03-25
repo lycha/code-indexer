@@ -1,7 +1,7 @@
 -- 001_initial.sql — Full DDL for the hybrid code indexing system
 
 -- Core node table: one row per syntactically complete code unit
-CREATE TABLE nodes (
+CREATE TABLE IF NOT EXISTS nodes (
     id                      TEXT PRIMARY KEY,
     file_path               TEXT NOT NULL,
     node_type               TEXT NOT NULL CHECK (node_type IN ('file', 'class', 'function', 'method', 'interface', 'object')),
@@ -22,7 +22,7 @@ CREATE TABLE nodes (
 );
 
 -- Dependency edge table: directed graph of code relationships
-CREATE TABLE edges (
+CREATE TABLE IF NOT EXISTS edges (
     source_id               TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
     target_id               TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
     edge_type               TEXT NOT NULL CHECK (edge_type IN ('calls', 'imports', 'inherits', 'overrides', 'references', 'instantiates')),
@@ -31,7 +31,7 @@ CREATE TABLE edges (
 );
 
 -- File registry: change detection and language tracking
-CREATE TABLE files (
+CREATE TABLE IF NOT EXISTS files (
     path                    TEXT PRIMARY KEY,
     last_modified           TEXT NOT NULL,
     content_hash            TEXT NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE files (
 );
 
 -- Full-text search virtual table for semantic queries
-CREATE VIRTUAL TABLE nodes_fts USING fts5(
+CREATE VIRTUAL TABLE IF NOT EXISTS nodes_fts USING fts5(
     id UNINDEXED,
     qualified_name,
     semantic_summary,
@@ -52,22 +52,22 @@ CREATE VIRTUAL TABLE nodes_fts USING fts5(
 );
 
 -- Index build metadata
-CREATE TABLE index_meta (
+CREATE TABLE IF NOT EXISTS index_meta (
     key                     TEXT PRIMARY KEY,
     value                   TEXT NOT NULL
 );
 
 -- Node lookups
-CREATE INDEX idx_nodes_file_path      ON nodes(file_path);
-CREATE INDEX idx_nodes_name           ON nodes(name);
-CREATE INDEX idx_nodes_qualified_name ON nodes(qualified_name);
-CREATE INDEX idx_nodes_node_type      ON nodes(node_type);
-CREATE INDEX idx_nodes_language       ON nodes(language);
-CREATE INDEX idx_nodes_unenriched     ON nodes(enriched_at) WHERE enriched_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_nodes_file_path      ON nodes(file_path);
+CREATE INDEX IF NOT EXISTS idx_nodes_name           ON nodes(name);
+CREATE INDEX IF NOT EXISTS idx_nodes_qualified_name ON nodes(qualified_name);
+CREATE INDEX IF NOT EXISTS idx_nodes_node_type      ON nodes(node_type);
+CREATE INDEX IF NOT EXISTS idx_nodes_language       ON nodes(language);
+CREATE INDEX IF NOT EXISTS idx_nodes_unenriched     ON nodes(enriched_at) WHERE enriched_at IS NULL;
 
 -- Edge traversal (both directions needed for dependency graph)
-CREATE INDEX idx_edges_source         ON edges(source_id);
-CREATE INDEX idx_edges_target         ON edges(target_id);
-CREATE INDEX idx_edges_type           ON edges(edge_type);
-CREATE INDEX idx_edges_source_type    ON edges(source_id, edge_type);
-CREATE INDEX idx_edges_target_type    ON edges(target_id, edge_type);
+CREATE INDEX IF NOT EXISTS idx_edges_source         ON edges(source_id);
+CREATE INDEX IF NOT EXISTS idx_edges_target         ON edges(target_id);
+CREATE INDEX IF NOT EXISTS idx_edges_type           ON edges(edge_type);
+CREATE INDEX IF NOT EXISTS idx_edges_source_type    ON edges(source_id, edge_type);
+CREATE INDEX IF NOT EXISTS idx_edges_target_type    ON edges(target_id, edge_type);

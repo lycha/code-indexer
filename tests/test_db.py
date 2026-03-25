@@ -103,24 +103,50 @@ class TestBootstrap:
         conn.commit()
         conn.close()
 
-        # Drop a table to verify migration re-runs
+        # Re-bootstrap should re-apply migration as a safe no-op
+        # (all CREATE statements use IF NOT EXISTS so existing tables don't crash)
+        bootstrap(db_path)
+
+        # Verify schema_version is updated back to 1
         conn = get_connection(db_path)
-        conn.execute("DROP TABLE IF EXISTS edges")
+        row = conn.execute(
+            "SELECT value FROM index_meta WHERE key = 'schema_version'"
+        ).fetchone()
+        assert row[0] == "1"
+
+        # Verify all tables still exist and are queryable
+        conn.execute("SELECT * FROM nodes LIMIT 0")
+        conn.execute("SELECT * FROM edges LIMIT 0")
+        conn.execute("SELECT * FROM files LIMIT 0")
+        conn.execute("SELECT * FROM nodes_fts LIMIT 0")
+        conn.execute("SELECT * FROM index_meta LIMIT 0")
+        conn.close()
+
+    def test_migration_replay_via_init_command(self, tmp_path):
+        """Setting schema_version to 0 and running index init succeeds."""
+        # First create a normal DB via CLI
+        result = subprocess.run(
+            ["index", "init"], capture_output=True, text=True, cwd=str(tmp_path)
+        )
+        assert result.returncode == 0
+
+        # Set schema_version to 0
+        db_path = str(tmp_path / ".codeindex" / "codeindex.db")
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "UPDATE index_meta SET value = '0' WHERE key = 'schema_version'"
+        )
         conn.commit()
         conn.close()
 
-        # Re-bootstrap should re-apply migration
-        # This will fail because we can't partially re-run DDL (tables already exist except edges)
-        # But the version check + re-run logic is what we're testing
-        # Actually, executescript with CREATE TABLE will fail on existing tables.
-        # The migration uses CREATE TABLE (not IF NOT EXISTS), so this will error.
-        # Let's just verify that a stale version triggers migration re-application.
-        # For a real upgrade test, we'd need a 002 migration. Let's test the version logic instead.
+        # Re-run init — should succeed (idempotent DDL)
+        result = subprocess.run(
+            ["index", "init"], capture_output=True, text=True, cwd=str(tmp_path)
+        )
+        assert result.returncode == 0
 
-        # Reset: do a clean bootstrap to test version update
-        db_path2 = str(tmp_path / ".codeindex2" / "codeindex.db")
-        bootstrap(db_path2)
-        conn = get_connection(db_path2)
+        # Verify schema_version restored
+        conn = sqlite3.connect(db_path)
         row = conn.execute(
             "SELECT value FROM index_meta WHERE key = 'schema_version'"
         ).fetchone()
