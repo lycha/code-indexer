@@ -138,16 +138,20 @@ class TestHashGatedEnrichment:
         _run_cmd("build", cwd=str(repo))
 
         # Simulate enrichment by setting enriched_at on all nodes
+        enriched_ts = datetime.now(timezone.utc).isoformat()
         conn = _connect(repo)
         conn.execute(
             "UPDATE nodes SET enriched_at = ?",
-            (datetime.now(timezone.utc).isoformat(),),
+            (enriched_ts,),
         )
         conn.commit()
-        unenriched_before = conn.execute(
-            "SELECT COUNT(*) FROM nodes WHERE enriched_at IS NULL"
-        ).fetchone()[0]
-        assert unenriched_before == 0
+
+        # Record node IDs and their enriched_at per file before modification
+        rows_before = conn.execute(
+            "SELECT id, file_path, enriched_at FROM nodes"
+        ).fetchall()
+        enriched_before = {r[0]: (r[1], r[2]) for r in rows_before}
+        assert all(ts is not None for _, ts in enriched_before.values())
         conn.close()
 
         # Modify sample.py
@@ -159,13 +163,25 @@ class TestHashGatedEnrichment:
         _run_cmd("build", cwd=str(repo))
 
         conn = _connect(repo)
-        unenriched_after = conn.execute(
-            "SELECT COUNT(*) FROM nodes WHERE enriched_at IS NULL"
-        ).fetchone()[0]
+        rows_after = conn.execute(
+            "SELECT id, file_path, enriched_at FROM nodes"
+        ).fetchall()
         conn.close()
 
-        # Nodes from modified file should have enriched_at cleared
-        assert unenriched_after > 0
+        # Nodes from sample.py should have enriched_at cleared (NULL)
+        changed_nodes = [r for r in rows_after if r[1] == "sample.py"]
+        assert len(changed_nodes) > 0, "Expected nodes from sample.py"
+        for node_id, fp, enriched_at in changed_nodes:
+            assert enriched_at is None, (
+                f"Node {node_id} in changed file sample.py should have enriched_at=NULL"
+            )
+
+        # Unchanged nodes should retain their original enriched_at
+        unchanged_nodes = [r for r in rows_after if r[1] != "sample.py"]
+        for node_id, fp, enriched_at in unchanged_nodes:
+            assert enriched_at == enriched_ts, (
+                f"Node {node_id} in unchanged file {fp} should retain enriched_at"
+            )
 
 
 # ── (4) Reset + rebuild equivalence ──────────────────────────────────
@@ -213,6 +229,10 @@ class TestDbPathConsistency:
         r = _run_cmd("--db", custom_db, "query", "Calculator", "--format", "json", cwd=str(repo))
         # Should not error out with exit 2 (db exists)
         assert r.returncode in (0, 1)
+
+        r = _run_cmd("--db", custom_db, "enrich", "--dry-run", cwd=str(repo))
+        # dry-run should succeed (exit 0 or 1) without needing API key
+        assert r.returncode in (0, 1), f"enrich --dry-run failed: {r.stderr}"
 
         r = _run_cmd("--db", custom_db, "reset", "--yes", cwd=str(repo))
         assert r.returncode == 0
@@ -434,7 +454,19 @@ class TestMultiLanguageBuild:
         _run_cmd("build", cwd=str(repo))
         conn = _connect(repo)
         edges = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
-        conn.close()
-        # There are shared identifiers (e.g. 'greet', 'helper', 'topLevelFunction')
-        # across .py, .kt, .ts — mapper should create cross-file edges
         assert edges > 0, "Expected edges from dependency mapping"
+
+        # Verify at least one edge links nodes from different languages
+        cross_lang = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM edges e
+            JOIN nodes src ON e.source_id = src.id
+            JOIN nodes tgt ON e.target_id = tgt.id
+            WHERE src.language != tgt.language
+            """
+        ).fetchone()[0]
+        conn.close()
+        assert cross_lang > 0, (
+            "Expected at least one cross-language edge (source and target in different languages)"
+        )
