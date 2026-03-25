@@ -22,11 +22,10 @@ def test_help_lists_all_subcommands():
         assert cmd in result.stdout, f"Subcommand '{cmd}' not found in --help output"
 
 
-def test_init_stub():
-    """index init prints [TODO] to stderr and exits 0."""
+def test_init_runs():
+    """index init exits 0 (now implemented, no longer a stub)."""
     result = subprocess.run(["index", "init"], capture_output=True, text=True)
     assert result.returncode == 0
-    assert "[TODO]" in result.stderr
 
 
 def test_build_stub():

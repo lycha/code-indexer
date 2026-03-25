@@ -1,8 +1,11 @@
 """CLI entry point for the code indexer."""
 
 import sys
+from pathlib import Path
 
 import click
+
+from indexer.db import bootstrap, resolve_db_path
 
 
 @click.group()
@@ -14,12 +17,38 @@ def cli(ctx: click.Context, db_path: str | None) -> None:
     ctx.obj["db_path"] = db_path
 
 
+def _update_gitignore() -> None:
+    """Append .codeindex/ to .gitignore if not already present."""
+    gitignore_path = Path(".gitignore")
+    entry = ".codeindex/"
+
+    if gitignore_path.exists():
+        content = gitignore_path.read_text()
+        # Check if already present (exact line match)
+        lines = content.splitlines()
+        if any(line.strip() == entry for line in lines):
+            return
+        # Append with newline separator if file doesn't end with one
+        if content and not content.endswith("\n"):
+            gitignore_path.write_text(content + "\n" + entry + "\n")
+        else:
+            with gitignore_path.open("a") as f:
+                f.write(entry + "\n")
+    else:
+        gitignore_path.write_text(entry + "\n")
+
+    click.echo(f"[SETUP] Added {entry} to .gitignore", err=True)
+
+
 @cli.command()
 @click.option("--no-gitignore-update", is_flag=True, default=False, help="Skip automatic .gitignore update.")
 @click.pass_context
 def init(ctx: click.Context, no_gitignore_update: bool) -> None:
     """Initialise the code index database."""
-    click.echo("[TODO] init not yet implemented", err=True)
+    db_path = resolve_db_path(ctx.obj.get("db_path"))
+    bootstrap(db_path)
+    if not no_gitignore_update:
+        _update_gitignore()
 
 
 @cli.command()
