@@ -200,7 +200,17 @@ def build(ctx: click.Context, phase: str | None, token_limit: int, exclude: tupl
 @click.pass_context
 def enrich(ctx: click.Context, dry_run: bool, model: str | None) -> None:
     """Enrich code nodes with LLM-generated semantic metadata."""
-    click.echo("[TODO] enrich not yet implemented", err=True)
+    from indexer.enricher import enrich_nodes
+
+    db_path = resolve_db_path(ctx.obj.get("db_path"))
+    bootstrap(db_path)
+    conn = get_connection(db_path)
+    try:
+        exit_code = enrich_nodes(conn, model=model, dry_run=dry_run)
+    finally:
+        conn.close()
+    if exit_code:
+        sys.exit(exit_code)
 
 
 @cli.command()

@@ -1,5 +1,6 @@
 """Smoke tests for the CLI entry point."""
 
+import os
 import subprocess
 import sys
 
@@ -38,11 +39,19 @@ def test_build_runs():
     assert "[PHASE 1]" in result.stderr
 
 
-def test_enrich_stub():
-    """index enrich prints [TODO] to stderr and exits 0."""
-    result = subprocess.run(["index", "enrich"], capture_output=True, text=True)
+def test_enrich_missing_api_key():
+    """index enrich without ANTHROPIC_API_KEY exits 2."""
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    result = subprocess.run(["index", "enrich"], capture_output=True, text=True, env=env)
+    assert result.returncode == 2
+    assert "ANTHROPIC_API_KEY" in result.stderr
+
+
+def test_enrich_dry_run():
+    """index enrich --dry-run exits 0 without API key."""
+    result = subprocess.run(["index", "enrich", "--dry-run"], capture_output=True, text=True)
     assert result.returncode == 0
-    assert "[TODO]" in result.stderr
+    assert "nodes to enrich" in result.stderr
 
 
 def test_query_stub():
