@@ -1,0 +1,21 @@
+{
+  "featureId": "t1-project-scaffold",
+  "reviewedAt": "2026-03-25T12:45:29Z",
+  "commitId": "ef1bb04",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The reviewed commit implements the T1 scaffold requirements: package metadata and script entrypoint, required module layout, click CLI group with six stub commands printing [TODO] to stderr, global --db context wiring, smoke tests, and README install guidance.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "The feature commit includes many unrelated mission artifacts (including prior .factory/validation files and broad scaffolding) beyond T1 scope, suggesting commit-scope boundaries are not being enforced clearly in shared guidance.",
+      "evidence": "git show --stat ef1bb04 lists 103 files, including .factory/validation/** and extensive docs/.factory scaffolding not required by the T1 feature description."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "PASS: T1 project scaffold behavior is present in commit ef1bb04 with no functional defects found for required CLI skeleton behavior. One shared-state convention observation was recorded about overly broad commit scope."
+}

@@ -1,0 +1,38 @@
+{
+  "milestone": "foundation",
+  "round": 1,
+  "status": "pass",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "python3 -m pytest tests/ -v",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "echo \"No typecheck configured - pure Python project\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "python3 -m pytest tests/ -v --tb=short",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [
+    {
+      "observation": "Feature t1 review noted commit scope included many unrelated files.",
+      "reason": "ambiguous"
+    }
+  ],
+  "previousRound": null
+}
