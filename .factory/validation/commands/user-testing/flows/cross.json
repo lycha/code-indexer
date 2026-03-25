@@ -1,0 +1,246 @@
+{
+  "groupId": "cross",
+  "testedAt": "2026-03-25T14:59:12.229176+00:00",
+  "isolation": {
+    "surface": "CLI",
+    "repo": "/Users/kjackowski/IdeaProjects/ai-os/code-indexer",
+    "tempWorkspaceRoot": "/tmp/codeindexer-ut-cross",
+    "dbPath": "/tmp/codeindexer-ut-cross/cross.db",
+    "pathPrefixApplied": "/Users/kjackowski/.factory/bin"
+  },
+  "toolsUsed": [
+    "Execute"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-CROSS-001",
+      "title": "First-time user flow",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run first-time build on fresh workspace",
+          "expected": "Auto-bootstrap + build succeeds",
+          "observed": "exit 0"
+        },
+        {
+          "action": "Run query after build",
+          "expected": "Queryable index returns results",
+          "observed": "exit 0 stdout_len=309"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/cross/VAL-CROSS-001-build-query.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-002",
+      "title": "Incremental build flow",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Modify sample.py and rerun build",
+          "expected": "Only changed file re-parsed",
+          "observed": "exit 0; sample_changed=True; unchanged_preserved=True"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/cross/VAL-CROSS-002-incremental.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-003",
+      "title": "Hash-gating enrichment flow",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Build after changing file with pre-set enriched_at",
+          "expected": "Changed nodes cleared to NULL; unchanged retain timestamp",
+          "observed": "build_exit=0 changed_null=10 unchanged_kept=17/17"
+        },
+        {
+          "action": "Run enrich --dry-run",
+          "expected": "Only changed nodes selected for enrichment",
+          "observed": "exit 0 dry_run_nodes=10"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/cross/VAL-CROSS-003-hash-gating.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-004",
+      "title": "Reset and rebuild equivalence",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Reset then rebuild",
+          "expected": "Equivalent counts/schema to fresh build baseline",
+          "observed": "reset_exit=0 rebuild_exit=0 baseline=(27,30,sv1) rebuilt=(27,30,sv1)"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/cross/VAL-CROSS-004-reset-rebuild.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-005",
+      "title": "DB path consistency across commands",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run init/build/enrich/query/status/reset all with same --db path",
+          "expected": "All commands operate successfully on custom DB",
+          "observed": "--db /tmp/codeindexer-ut-cross/cross5.db init=>0; --db /tmp/codeindexer-ut-cross/cross5.db build=>0; --db /tmp/codeindexer-ut-cross/cross5.db enrich --dry-run=>0; --db /tmp/codeindexer-ut-cross/cross5.db query Calculator --format json=>0; --db /tmp/codeindexer-ut-cross/cross5.db status=>0; --db /tmp/codeindexer-ut-cross/cross5.db reset --yes=>0"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/cross/VAL-CROSS-005-db-path-consistency.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-006",
+      "title": "Status reflects pipeline state",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Check status before build",
+          "expected": "Exit 1 for missing index",
+          "observed": "exit 1"
+        },
+        {
+          "action": "Build then status",
+          "expected": "Node/edge counts shown and unenriched present",
+          "observed": "build_exit=0 nodes=27 edges=30 unenriched=27"
+        },
+        {
+          "action": "Mark one node enriched and re-check status",
+          "expected": "Unenriched decreases by 1",
+          "observed": "unenriched_after=26"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/cross/VAL-CROSS-006-status-state.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-007",
+      "title": "Exit code consistency for orchestrator",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run representative success/warning/fatal scenarios",
+          "expected": "0 clean, 1 warning, 2 fatal across command set",
+          "observed": "init=0 build=0 status_missing=1 query_bad=2 reset_no_yes=2 build_warning=1"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/cross/VAL-CROSS-007-exit-codes.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-008",
+      "title": "Build lock prevents concurrent execution",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Start first build and trigger second build during lock window",
+          "expected": "Second build exits 2 with concurrent-build error",
+          "observed": "saw_lock=True first_exit=0 second_exit=2 msg_match=True"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/cross/VAL-CROSS-008-concurrent-lock.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-009",
+      "title": "Gitignore managed across init and build",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run init/build/init with empty .gitignore",
+          "expected": "Adds .codeindex/ once, no duplicates",
+          "observed": "codes=(0,0,0) entry_count=1"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/cross/VAL-CROSS-009-gitignore.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-010",
+      "title": "FTS5 consistency after incremental rebuild",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Incrementally rebuild after content mutation and compare nodes vs FTS external-content rows",
+          "expected": "FTS rowset remains consistent with nodes (same count, no orphans, no stale token A)",
+          "observed": "nodes=26 fts=26 orphans=0 tokenA_nodes=0 tokenB_nodes=2"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/cross/VAL-CROSS-010-fts-consistency.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-011",
+      "title": "Multi-language build",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Build with .py/.kt/.ts fixtures",
+          "expected": "Nodes from all languages and cross-language edges exist",
+          "observed": "exit=0 py=8 kt=9 ts=8 cross_edges=22"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/cross/VAL-CROSS-011-multilang.txt"
+        ]
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "First build completed too quickly to reliably observe lock window.",
+      "resolved": true,
+      "resolution": "Expanded isolated fixture set with many temporary files to extend build runtime and reran concurrency check.",
+      "affectedAssertions": [
+        "VAL-CROSS-008"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 11 assertions: 11 passed, 0 failed, 0 blocked, 0 skipped."
+}

@@ -1,0 +1,251 @@
+{
+  "groupId": "enrich",
+  "testedAt": "2026-03-25T14:55:14.957643+00:00",
+  "isolation": {
+    "repoRoot": "/Users/kjackowski/IdeaProjects/ai-os/code-indexer",
+    "workspace": "/tmp/codeindexer-ut-enrich",
+    "dbPath": "/tmp/codeindexer-ut-enrich/enrich.db",
+    "pathPrefix": "/Users/kjackowski/.factory/bin",
+    "missionDir": "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8"
+  },
+  "toolsUsed": [
+    "Execute",
+    "index CLI",
+    "pytest",
+    "sqlite3"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-ENRICH-001",
+      "title": "Unenriched node selection",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Build isolated DB and manually set one node enriched_at non-null",
+          "expected": "Only remaining NULL enriched_at nodes are selected",
+          "observed": "Pre-counts: total=4, unenriched changed 4->3 after manual mark"
+        },
+        {
+          "action": "Run `index --db /tmp/codeindexer-ut-enrich/enrich.db enrich --dry-run`",
+          "expected": "Reported node count equals unenriched count only",
+          "observed": "stderr reports `3 nodes to enrich`"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/enrich/VAL-ENRICH-001-pre-counts.txt",
+          "commands/enrich/VAL-ENRICH-001-003.stderr.txt"
+        ],
+        "network": "No API call in dry-run",
+        "consoleErrors": "n/a (CLI-only flow)"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ENRICH-002",
+      "title": "Pre-run estimate",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run dry-run enrich",
+          "expected": "Print `X nodes to enrich. Estimated time: ~Y minutes.`",
+          "observed": "stderr: `3 nodes to enrich. Estimated time: ~1 minutes.`"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/enrich/VAL-ENRICH-001-003.stderr.txt"
+        ],
+        "network": "n/a",
+        "consoleErrors": "n/a"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ENRICH-003",
+      "title": "Dry-run mode",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run `index ... enrich --dry-run`",
+          "expected": "Exit 0 and no enrichment writes",
+          "observed": "Command succeeded; post-check unchanged counts (unenriched=3, enriched_nonnull=1)"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/enrich/VAL-ENRICH-001-003.stdout.txt",
+          "commands/enrich/VAL-ENRICH-001-003.stderr.txt",
+          "commands/enrich/VAL-ENRICH-003-post-dryrun-state.txt"
+        ],
+        "network": "No API call required (no key set during dry-run)",
+        "consoleErrors": "n/a"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ENRICH-004",
+      "title": "Enrichment data stored",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run `python3 -m pytest tests/test_enricher.py -v`",
+          "expected": "Storage fields populated after enrichment",
+          "observed": "`TestEnrichNodes::test_enriches_unenriched_nodes` PASSED"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/enrich/VAL-ENRICH-pytest.stdout.txt"
+        ],
+        "network": "Mocked in test",
+        "consoleErrors": "n/a"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ENRICH-005",
+      "title": "Model override",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run enricher test suite",
+          "expected": "Model override stored in enrichment_model",
+          "observed": "`TestEnrichNodes::test_model_override` PASSED"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/enrich/VAL-ENRICH-pytest.stdout.txt"
+        ],
+        "network": "Mocked in test",
+        "consoleErrors": "n/a"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ENRICH-006",
+      "title": "Retry on rate limit",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run enricher test suite",
+          "expected": "Exponential backoff retry on rate limit",
+          "observed": "`TestCallLlm::test_retries_on_rate_limit` PASSED"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/enrich/VAL-ENRICH-pytest.stdout.txt"
+        ],
+        "network": "Mocked in test",
+        "consoleErrors": "n/a"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ENRICH-007",
+      "title": "Malformed JSON handling",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run enricher test suite",
+          "expected": "Malformed JSON logs warning and node remains unenriched",
+          "observed": "`TestEnrichNodes::test_malformed_json_skipped` PASSED"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/enrich/VAL-ENRICH-pytest.stdout.txt"
+        ],
+        "network": "Mocked in test",
+        "consoleErrors": "n/a"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ENRICH-008",
+      "title": "Missing API key",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run `env -u ANTHROPIC_API_KEY index --db ... enrich`",
+          "expected": "Exit 2 with missing key error",
+          "observed": "exit=2 and stderr `[ERROR] ANTHROPIC_API_KEY not set.`"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/enrich/VAL-ENRICH-008.stderr.txt",
+          "commands/enrich/VAL-ENRICH-008.exit.txt"
+        ],
+        "network": "No API request issued",
+        "consoleErrors": "n/a"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ENRICH-009",
+      "title": "FTS5 updated after enrichment",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run enricher test suite",
+          "expected": "FTS5 reflects enriched content",
+          "observed": "`TestEnrichNodes::test_fts_updated_after_enrichment` PASSED"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/enrich/VAL-ENRICH-pytest.stdout.txt"
+        ],
+        "network": "Mocked in test",
+        "consoleErrors": "n/a"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ENRICH-010",
+      "title": "Exit codes",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run enricher test suite",
+          "expected": "Exit 0 when all enriched; exit 1 when some remain",
+          "observed": "`test_enriches_unenriched_nodes` and `test_exit_1_when_some_remain` both PASSED"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/enrich/VAL-ENRICH-pytest.stdout.txt"
+        ],
+        "network": "Mocked in test",
+        "consoleErrors": "n/a"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ENRICH-011",
+      "title": "Enrichment context includes graph neighbors",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run enricher test suite",
+          "expected": "Prompt includes parent, children, callers, callees",
+          "observed": "`TestEnrichNodes::test_context_includes_graph_neighbors` PASSED"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/enrich/VAL-ENRICH-pytest.stdout.txt"
+        ],
+        "network": "Mocked in test",
+        "consoleErrors": "n/a"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 11 assigned enrichment assertions: 11 passed, 0 failed, 0 blocked. CLI dry-run/missing-key behavior was validated on isolated DB; implementation-contract assertions were validated via passing enricher tests."
+}

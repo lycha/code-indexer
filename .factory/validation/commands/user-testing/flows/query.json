@@ -1,0 +1,304 @@
+{
+  "groupId": "query",
+  "testedAt": "2026-03-25T14:58:18.833445+00:00",
+  "isolation": {
+    "repo": "/Users/kjackowski/IdeaProjects/ai-os/code-indexer",
+    "workspaceRoot": "/tmp/codeindexer-ut-query",
+    "dbPath": "/tmp/codeindexer-ut-query/query.db",
+    "pathPrefix": "/Users/kjackowski/.factory/bin"
+  },
+  "toolsUsed": [
+    "Execute"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-QUERY-001",
+      "title": "Lexical search for identifier",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run lexical query for helper_function",
+          "expected": "Matching node returned via ripgrep+node lookup",
+          "observed": "JSON result included qualified_name helper_function"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/query/VAL-QUERY-001-lexical.stdout.txt",
+          "commands/query/VAL-QUERY-001-lexical.stderr.txt",
+          "commands/query/VAL-QUERY-001-lexical.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QUERY-002",
+      "title": "Semantic search for natural language",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run semantic query for 'simple calculator class'",
+          "expected": "Ranked semantic results returned",
+          "observed": "JSON array returned ranked class/method nodes"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/query/VAL-QUERY-002-semantic.stdout.txt",
+          "commands/query/VAL-QUERY-002-semantic.stderr.txt",
+          "commands/query/VAL-QUERY-002-semantic.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QUERY-003",
+      "title": "Graph search with depth",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run graph query from node Sample.kt::class::SampleClass depth=2",
+          "expected": "Recursive traversal returns graph nodes/edges",
+          "observed": "Graph JSON contained nodes and edges"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/query/VAL-QUERY-003-graph-depth2.stdout.txt",
+          "commands/query/VAL-QUERY-003-graph-depth2.stderr.txt",
+          "commands/query/VAL-QUERY-003-graph-depth2.exit.txt",
+          "commands/query/graph-root-node.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QUERY-004",
+      "title": "Query router auto-detection",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run query helper_function without --type",
+          "expected": "Routes to lexical",
+          "observed": "stderr showed [QUERY] Strategy: lexical"
+        },
+        {
+          "action": "Run query 'simple calculator class' without --type",
+          "expected": "Routes to semantic",
+          "observed": "stderr showed [QUERY] Strategy: semantic"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/query/VAL-QUERY-004-router-identifier.stderr.txt",
+          "commands/query/VAL-QUERY-004-router-natural.stderr.txt",
+          "commands/query/VAL-QUERY-004-router-identifier.exit.txt",
+          "commands/query/VAL-QUERY-004-router-natural.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QUERY-005",
+      "title": "Fallback routing",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run identifier-like query sampleclass",
+          "expected": "Empty lexical falls back to semantic",
+          "observed": "stderr showed lexical->semantic fallback and results returned"
+        },
+        {
+          "action": "Force semantic-empty condition (isolated DB copy with empty nodes_fts) then run --type semantic helper_function",
+          "expected": "Empty semantic falls back to lexical",
+          "observed": "stderr showed semantic->lexical fallback and lexical result returned"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/query/VAL-QUERY-005-fallback-lexical-to-semantic.stdout.txt",
+          "commands/query/VAL-QUERY-005-fallback-lexical-to-semantic.stderr.txt",
+          "commands/query/VAL-QUERY-005-fallback-semantic-to-lexical.stdout.txt",
+          "commands/query/VAL-QUERY-005-fallback-semantic-to-lexical.stderr.txt",
+          "commands/query/VAL-QUERY-005-fallback-lexical-to-semantic.exit.txt",
+          "commands/query/VAL-QUERY-005-fallback-semantic-to-lexical.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QUERY-006",
+      "title": "--with-source flag",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Compare lexical JSON output with and without --with-source",
+          "expected": "raw_source omitted by default and included with flag",
+          "observed": "raw_source absent without flag, present with flag"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/query/VAL-QUERY-006-without-source.stdout.txt",
+          "commands/query/VAL-QUERY-006-with-source.stdout.txt",
+          "commands/query/VAL-QUERY-006-without-source.exit.txt",
+          "commands/query/VAL-QUERY-006-with-source.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QUERY-007",
+      "title": "JSON output format",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run query with --format json",
+          "expected": "Single JSON array on stdout",
+          "observed": "stdout parsed as JSON array"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/query/VAL-QUERY-007-json-format.stdout.txt",
+          "commands/query/VAL-QUERY-007-json-format.stderr.txt",
+          "commands/query/VAL-QUERY-007-json-format.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QUERY-008",
+      "title": "JSONL output format",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run query with --format jsonl",
+          "expected": "One JSON object per line",
+          "observed": "stdout contained line-delimited valid JSON objects"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/query/VAL-QUERY-008-jsonl-format.stdout.txt",
+          "commands/query/VAL-QUERY-008-jsonl-format.stderr.txt",
+          "commands/query/VAL-QUERY-008-jsonl-format.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QUERY-009",
+      "title": "Text output for TTY",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run query in pseudo-TTY without --format",
+          "expected": "Default human-readable text output",
+          "observed": "TTY capture showed text line beginning with node type/qualified name, not JSON"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/query/VAL-QUERY-009-tty-default.stdout.txt",
+          "commands/query/VAL-QUERY-009-tty-default.stderr.txt",
+          "commands/query/VAL-QUERY-009-tty-default.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QUERY-010",
+      "title": "Stream separation",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Capture stdout/stderr separately for lexical query",
+          "expected": "Results only on stdout, routing/warnings on stderr",
+          "observed": "stdout had JSON results; stderr had [QUERY] Strategy message"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/query/VAL-QUERY-010-stream-separation.stdout.txt",
+          "commands/query/VAL-QUERY-010-stream-separation.stderr.txt",
+          "commands/query/VAL-QUERY-010-stream-separation.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QUERY-011",
+      "title": "Exit code 1 on missing index",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run query against nonexistent isolated DB",
+          "expected": "Exit code 1 with helpful missing-index error",
+          "observed": "Exit code 1 and stderr contained 'Index not found. Run index init/build first'"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/query/VAL-QUERY-011-missing-index.stdout.txt",
+          "commands/query/VAL-QUERY-011-missing-index.stderr.txt",
+          "commands/query/VAL-QUERY-011-missing-index.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QUERY-012",
+      "title": "Top-k limit",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run semantic query with --top-k 5",
+          "expected": "At most 5 results",
+          "observed": "Returned 4 results (<=5)"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/query/VAL-QUERY-012-top-k-5.stdout.txt",
+          "commands/query/VAL-QUERY-012-top-k-5.stderr.txt",
+          "commands/query/VAL-QUERY-012-top-k-5.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QUERY-013",
+      "title": "Graph search depth option",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Compare graph query depth=2 vs depth=3",
+          "expected": "Depth 3 traverses at least as far as depth 2",
+          "observed": "Depth 3 node count was equal or greater than depth 2"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/query/VAL-QUERY-013-graph-depth2.stdout.txt",
+          "commands/query/VAL-QUERY-013-graph-depth3.stdout.txt",
+          "commands/query/VAL-QUERY-013-graph-depth2.exit.txt",
+          "commands/query/VAL-QUERY-013-graph-depth3.exit.txt"
+        ]
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Semantic->lexical fallback was not naturally reachable with fixture data because semantic FTS returned hits for all lexical identifiers.",
+      "resolved": true,
+      "resolution": "Used an isolated DB copy (`query_s2l.db`) with emptied `nodes_fts` to create deterministic semantic-empty condition and verify fallback behavior.",
+      "affectedAssertions": [
+        "VAL-QUERY-005"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 13 assertions: 13 passed, 0 failed, 0 blocked."
+}

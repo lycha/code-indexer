@@ -1,0 +1,139 @@
+{
+  "groupId": "ops",
+  "testedAt": "2026-03-25T15:01:10.378179+00:00",
+  "isolation": {
+    "repo": "/Users/kjackowski/IdeaProjects/ai-os/code-indexer",
+    "workspaceRoot": "/tmp/codeindexer-ut-ops",
+    "dbPath": "/tmp/codeindexer-ut-ops/ops.db",
+    "pathPrefix": "/Users/kjackowski/.factory/bin"
+  },
+  "toolsUsed": [
+    "Execute"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-OPS-001",
+      "title": "Status display",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run index status on initialized DB",
+          "expected": "Outputs node/edge/unenriched counts, timestamps, schema version, DB path",
+          "observed": "Status output included all required fields"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/ops/VAL-OPS-001-status-display.stdout.txt",
+          "commands/ops/VAL-OPS-001-status-display.stderr.txt",
+          "commands/ops/VAL-OPS-001-status-display.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-OPS-002",
+      "title": "Status on missing DB",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run index status against nonexistent DB path",
+          "expected": "Exit 1 with init/build guidance",
+          "observed": "Exit code 1 with [INFO] Index not initialised. Run: index build"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/ops/VAL-OPS-002-status-missing.stdout.txt",
+          "commands/ops/VAL-OPS-002-status-missing.stderr.txt",
+          "commands/ops/VAL-OPS-002-status-missing.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-OPS-003",
+      "title": "Schema version mismatch in status",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Set schema_version to future value then run status",
+          "expected": "Print warning with recovery instructions",
+          "observed": "Status emitted [WARNING] Schema version mismatch"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/ops/VAL-OPS-003-status-mismatch.stdout.txt",
+          "commands/ops/VAL-OPS-003-status-mismatch.stderr.txt",
+          "commands/ops/VAL-OPS-003-status-mismatch.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-OPS-004",
+      "title": "Reset drops and recreates",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run index reset --yes and inspect DB",
+          "expected": "Tables recreated and data cleared",
+          "observed": "nodes/edges/files counts are 0 and schema version remains initialized"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/ops/VAL-OPS-004-reset-yes.stdout.txt",
+          "commands/ops/VAL-OPS-004-reset-yes.stderr.txt",
+          "commands/ops/VAL-OPS-004-reset-yes.exit.txt",
+          "commands/ops/VAL-OPS-004-post-reset-state.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-OPS-005",
+      "title": "Reset requires --yes in non-TTY",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run index reset without --yes in non-interactive command",
+          "expected": "Exit 2 with destructive-operation error",
+          "observed": "Exit code 2 with required --yes error"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/ops/VAL-OPS-005-reset-no-yes.stdout.txt",
+          "commands/ops/VAL-OPS-005-reset-no-yes.stderr.txt",
+          "commands/ops/VAL-OPS-005-reset-no-yes.exit.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-OPS-006",
+      "title": "Reset interactive prompt",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run reset in pseudo-tty and respond n",
+          "expected": "Prompt \"This will delete all indexed data. Continue? [y/N]\" appears",
+          "observed": "Interactive run showed the expected prompt text"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "commands/ops/VAL-OPS-006-interactive.stdout.txt",
+          "commands/ops/VAL-OPS-006-interactive.stderr.txt",
+          "commands/ops/VAL-OPS-006-interactive.exit.txt"
+        ]
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 6 assertions: 6 passed, 0 failed, 0 blocked."
+}
