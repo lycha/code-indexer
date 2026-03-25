@@ -94,6 +94,17 @@ index enrich
 
 Enrichment is hash-gated: re-running `index enrich` after code changes only processes nodes whose content actually changed.
 
+#### Phase 3 Enrichment — Cost Model
+**First-run cost (one-time per repository):** enriching a ~14,000-node codebase with Claude Sonnet costs approximately $42–67 depending on average node size. This is paid once when you first index a repository.
+**Incremental cost (every subsequent run):** the indexer is hash-gated. Phase 1 clears `enriched_at` only on nodes whose `content_hash` changed. Phase 3 then only processes those nodes. On a normally-evolving codebase where a sprint touches 1–2% of nodes, a rebuild enrichment run costs under $5 — often under $1.
+
+**What drives cost up:**
+- Large-scale refactors that invalidate many `content_hash` values in one go
+- Onboarding many repositories (each pays the first-run cost once)
+- Branch switches between long-lived divergent branches
+
+**If Phase 3 cost is a concern**, run `index enrich --dry-run first` — it reports the number of unenriched nodes before making any API calls. You can also skip Phase 3 entirely; the structural index (Phase 1+2) still provides AST nodes and dependency graph context at zero LLM cost.
+
 ### Step 5: Query the index
 
 **Find a symbol by name** (lexical search):
