@@ -12,6 +12,8 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SAMPLE_PY = FIXTURES_DIR / "sample.py"
 SAMPLE_KT = FIXTURES_DIR / "Sample.kt"
 SAMPLE_TS = FIXTURES_DIR / "sample.ts"
+SAMPLE_JAVA = FIXTURES_DIR / "Sample.java"
+SAMPLE_RB = FIXTURES_DIR / "sample.rb"
 
 
 class TestParseFile:
@@ -510,16 +512,6 @@ class TestTypeScriptParsing:
 class TestUnsupportedLanguage:
     """Test that unsupported languages log a warning and continue."""
 
-    def test_java_file_warning(self, db_conn, tmp_path, capsys):
-        from indexer.parser import parse_file
-
-        java_file = tmp_path / "Main.java"
-        java_file.write_text("public class Main {}")
-        nodes = parse_file(java_file, db_conn, repo_root=tmp_path)
-        assert nodes == []
-        captured = capsys.readouterr()
-        assert "Unsupported language: java" in captured.err
-
     def test_go_file_warning(self, db_conn, tmp_path, capsys):
         from indexer.parser import parse_file
 
@@ -533,13 +525,13 @@ class TestUnsupportedLanguage:
     def test_unsupported_in_directory(self, db_conn, tmp_path, capsys):
         from indexer.parser import parse_directory
 
-        (tmp_path / "Main.java").write_text("public class Main {}")
+        (tmp_path / "main.go").write_text("package main")
         (tmp_path / "good.py").write_text("def good(): pass\n")
         parse_directory(tmp_path, db_conn, token_limit=512)
 
-        # Java warning logged
+        # Go warning logged
         captured = capsys.readouterr()
-        assert "Unsupported language: java" in captured.err
+        assert "Unsupported language: go" in captured.err
 
         # Python file was still parsed
         nodes = db_conn.execute("SELECT name FROM nodes WHERE node_type='function'").fetchall()
@@ -547,8 +539,182 @@ class TestUnsupportedLanguage:
         assert "good" in names
 
 
+class TestJavaParsing:
+    """Test tree-sitter Java parsing."""
+
+    def test_extracts_file_node(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_JAVA, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        file_nodes = [n for n in nodes if n["node_type"] == "file"]
+        assert len(file_nodes) == 1
+        assert file_nodes[0]["name"] == "Sample.java"
+        assert file_nodes[0]["language"] == "java"
+
+    def test_extracts_class_node(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_JAVA, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        class_nodes = [n for n in nodes if n["node_type"] == "class" and n["name"] == "SampleService"]
+        assert len(class_nodes) == 1
+        assert class_nodes[0]["qualified_name"] == "SampleService"
+
+    def test_extracts_interface_node(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_JAVA, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        iface_nodes = [n for n in nodes if n["node_type"] == "interface"]
+        assert len(iface_nodes) == 1
+        assert iface_nodes[0]["name"] == "Repository"
+
+    def test_extracts_enum_as_class(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_JAVA, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        enum_nodes = [n for n in nodes if n["name"] == "Status"]
+        assert len(enum_nodes) == 1
+        assert enum_nodes[0]["node_type"] == "class"
+
+    def test_extracts_method_nodes(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_JAVA, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        method_nodes = [n for n in nodes if n["node_type"] == "method"]
+        names = {n["name"] for n in method_nodes}
+        assert "getName" in names
+        assert "setName" in names
+        assert "SampleService" in names  # constructor
+        assert "findById" in names
+        assert "findAll" in names
+        for m in method_nodes:
+            assert "." in m["qualified_name"]
+
+    def test_node_id_format(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_JAVA, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        for node in nodes:
+            parts = node["id"].split("::")
+            assert len(parts) == 3, f"Bad node ID format: {node['id']}"
+            assert parts[1] == node["node_type"]
+
+    def test_content_hash_is_sha256(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_JAVA, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        for node in nodes:
+            expected = hashlib.sha256(node["raw_source"].encode()).hexdigest()
+            assert node["content_hash"] == expected
+
+    def test_signature_present_for_methods(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_JAVA, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        for node in nodes:
+            if node["node_type"] == "method":
+                assert node["signature"] is not None, f"Missing signature for {node['qualified_name']}"
+
+    def test_docstring_extraction(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_JAVA, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        service = [n for n in nodes if n["name"] == "SampleService" and n["node_type"] == "class"][0]
+        assert service["docstring"] is not None
+        assert "sample service" in service["docstring"].lower()
+
+        get_name = [n for n in nodes if n["name"] == "getName"][0]
+        assert get_name["docstring"] is not None
+        assert "name" in get_name["docstring"].lower()
+
+
+class TestRubyParsing:
+    """Test tree-sitter Ruby parsing."""
+
+    def test_extracts_file_node(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_RB, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        file_nodes = [n for n in nodes if n["node_type"] == "file"]
+        assert len(file_nodes) == 1
+        assert file_nodes[0]["name"] == "sample.rb"
+        assert file_nodes[0]["language"] == "ruby"
+
+    def test_extracts_module_as_class(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_RB, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        mod_nodes = [n for n in nodes if n["name"] == "Authentication"]
+        assert len(mod_nodes) == 1
+        assert mod_nodes[0]["node_type"] == "class"
+
+    def test_extracts_class_node(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_RB, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        class_nodes = [n for n in nodes if n["name"] == "UserService"]
+        assert len(class_nodes) == 1
+        assert class_nodes[0]["node_type"] == "class"
+        assert class_nodes[0]["qualified_name"] == "Authentication.UserService"
+
+    def test_extracts_method_nodes(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_RB, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        method_nodes = [n for n in nodes if n["node_type"] == "method"]
+        names = {n["name"] for n in method_nodes}
+        assert "initialize" in names
+        assert "greet" in names
+        assert "create" in names
+        for m in method_nodes:
+            assert "." in m["qualified_name"]
+
+    def test_extracts_function_nodes(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_RB, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        func_nodes = [n for n in nodes if n["node_type"] == "function"]
+        names = {n["name"] for n in func_nodes}
+        assert "standalone_function" in names
+
+    def test_node_id_format(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_RB, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        for node in nodes:
+            parts = node["id"].split("::")
+            assert len(parts) == 3, f"Bad node ID format: {node['id']}"
+            assert parts[1] == node["node_type"]
+
+    def test_content_hash_is_sha256(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_RB, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        for node in nodes:
+            expected = hashlib.sha256(node["raw_source"].encode()).hexdigest()
+            assert node["content_hash"] == expected
+
+    def test_signature_present_for_methods(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_RB, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        greet = [n for n in nodes if n["name"] == "greet"][0]
+        assert greet["signature"] is not None
+
+    def test_docstring_extraction(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_RB, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        user_service = [n for n in nodes if n["name"] == "UserService"][0]
+        assert user_service["docstring"] is not None
+        assert "sample user service" in user_service["docstring"].lower()
+
+        greet = [n for n in nodes if n["name"] == "greet"][0]
+        assert greet["docstring"] is not None
+        assert "greets" in greet["docstring"].lower()
+
+
 class TestMultiLanguageDirectory:
-    """Test parsing a directory with .py, .kt, and .ts files."""
+    """Test parsing a directory with .py, .kt, .ts, .java, and .rb files."""
 
     def test_parses_all_languages(self, db_conn, tmp_path):
         from indexer.parser import parse_directory
@@ -556,17 +722,22 @@ class TestMultiLanguageDirectory:
         (tmp_path / "module.py").write_text('def py_func():\n    pass\n')
         (tmp_path / "Module.kt").write_text('fun kt_func(): Int {\n    return 1\n}\n')
         (tmp_path / "module.ts").write_text('function ts_func(): number {\n    return 1;\n}\n')
+        (tmp_path / "Module.java").write_text('class Mod {\n    void java_func() {}\n}\n')
+        (tmp_path / "module.rb").write_text('def rb_func(x)\n  x\nend\n')
 
         parse_directory(tmp_path, db_conn, token_limit=512)
 
-        # Check nodes from all three languages
         py_nodes = db_conn.execute("SELECT name FROM nodes WHERE language='python' AND node_type='function'").fetchall()
         kt_nodes = db_conn.execute("SELECT name FROM nodes WHERE language='kotlin' AND node_type='function'").fetchall()
         ts_nodes = db_conn.execute("SELECT name FROM nodes WHERE language='typescript' AND node_type='function'").fetchall()
+        java_nodes = db_conn.execute("SELECT name FROM nodes WHERE language='java' AND node_type='method'").fetchall()
+        rb_nodes = db_conn.execute("SELECT name FROM nodes WHERE language='ruby' AND node_type='function'").fetchall()
 
         assert {r[0] for r in py_nodes} == {"py_func"}
         assert {r[0] for r in kt_nodes} == {"kt_func"}
         assert {r[0] for r in ts_nodes} == {"ts_func"}
+        assert {r[0] for r in java_nodes} == {"java_func"}
+        assert {r[0] for r in rb_nodes} == {"rb_func"}
 
     def test_files_table_has_correct_languages(self, db_conn, tmp_path):
         from indexer.parser import parse_directory
@@ -574,6 +745,8 @@ class TestMultiLanguageDirectory:
         (tmp_path / "module.py").write_text('def py_func():\n    pass\n')
         (tmp_path / "Module.kt").write_text('fun kt_func(): Int {\n    return 1\n}\n')
         (tmp_path / "module.ts").write_text('function ts_func(): number {\n    return 1;\n}\n')
+        (tmp_path / "Module.java").write_text('class Mod {\n    void java_func() {}\n}\n')
+        (tmp_path / "module.rb").write_text('def rb_func(x)\n  x\nend\n')
 
         parse_directory(tmp_path, db_conn, token_limit=512)
 
@@ -582,3 +755,5 @@ class TestMultiLanguageDirectory:
         assert langs["Module.kt"] == "kotlin"
         assert langs["module.py"] == "python"
         assert langs["module.ts"] == "typescript"
+        assert langs["Module.java"] == "java"
+        assert langs["module.rb"] == "ruby"

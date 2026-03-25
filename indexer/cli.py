@@ -2,6 +2,9 @@
 
 import json
 import os
+import platform
+import shutil
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -53,6 +56,60 @@ def init(ctx: click.Context, no_gitignore_update: bool) -> None:
     bootstrap(db_path)
     if not no_gitignore_update:
         _update_gitignore()
+
+
+@cli.command()
+@click.pass_context
+def install(ctx: click.Context) -> None:
+    """Install external dependencies (ripgrep)."""
+    if shutil.which("rg"):
+        click.echo("[OK] ripgrep is already installed.", err=True)
+        return
+
+    system = platform.system()
+    click.echo("[INSTALL] ripgrep not found. Installing...", err=True)
+
+    commands: list[tuple[str, list[str]]] = []
+    if system == "Darwin":
+        if shutil.which("brew"):
+            commands.append(("Homebrew", ["brew", "install", "ripgrep"]))
+        else:
+            click.echo("[ERROR] Homebrew not found. Install ripgrep manually: https://github.com/BurntSushi/ripgrep#installation", err=True)
+            sys.exit(2)
+    elif system == "Linux":
+        if shutil.which("apt-get"):
+            commands.append(("apt", ["sudo", "apt-get", "install", "-y", "ripgrep"]))
+        elif shutil.which("dnf"):
+            commands.append(("dnf", ["sudo", "dnf", "install", "-y", "ripgrep"]))
+        elif shutil.which("pacman"):
+            commands.append(("pacman", ["sudo", "pacman", "-S", "--noconfirm", "ripgrep"]))
+        else:
+            click.echo("[ERROR] No supported package manager found. Install ripgrep manually: https://github.com/BurntSushi/ripgrep#installation", err=True)
+            sys.exit(2)
+    elif system == "Windows":
+        if shutil.which("choco"):
+            commands.append(("Chocolatey", ["choco", "install", "-y", "ripgrep"]))
+        elif shutil.which("scoop"):
+            commands.append(("Scoop", ["scoop", "install", "ripgrep"]))
+        else:
+            click.echo("[ERROR] No supported package manager found. Install ripgrep manually: https://github.com/BurntSushi/ripgrep#installation", err=True)
+            sys.exit(2)
+    else:
+        click.echo(f"[ERROR] Unsupported platform: {system}. Install ripgrep manually: https://github.com/BurntSushi/ripgrep#installation", err=True)
+        sys.exit(2)
+
+    for label, cmd in commands:
+        click.echo(f"[INSTALL] Using {label}: {' '.join(cmd)}", err=True)
+        result = subprocess.run(cmd)
+        if result.returncode != 0:
+            click.echo(f"[ERROR] {label} install failed (exit {result.returncode}).", err=True)
+            sys.exit(2)
+
+    if shutil.which("rg"):
+        click.echo("[OK] ripgrep installed successfully.", err=True)
+    else:
+        click.echo("[ERROR] ripgrep installation did not place 'rg' on PATH.", err=True)
+        sys.exit(2)
 
 
 def _acquire_lock(lock_path: Path) -> None:
@@ -136,7 +193,10 @@ def build(ctx: click.Context, phase: str | None, token_limit: int, exclude: tupl
 
         # Phase 1: Parse
         click.echo("[PHASE 1] Parsing source files...", err=True)
+        t0 = time.monotonic()
         warnings = parse_directory(repo_root, conn, token_limit=token_limit, exclude_patterns=list(exclude) if exclude else None)
+        phase1_elapsed = time.monotonic() - t0
+        click.echo(f"[PHASE 1] Done in {phase1_elapsed:.1f}s", err=True)
         if warnings:
             for w in warnings:
                 click.echo(f"[WARNING] {w}", err=True)
@@ -149,7 +209,10 @@ def build(ctx: click.Context, phase: str | None, token_limit: int, exclude: tupl
 
         # Phase 2: Map dependencies
         click.echo("[PHASE 2] Mapping dependencies...", err=True)
+        t0 = time.monotonic()
         edges_inserted = map_dependencies(all_node_ids, conn, str(repo_root))
+        phase2_elapsed = time.monotonic() - t0
+        click.echo(f"[PHASE 2] Done in {phase2_elapsed:.1f}s", err=True)
 
         # Update index_meta
         now = datetime.now(timezone.utc).isoformat()
@@ -206,7 +269,10 @@ def enrich(ctx: click.Context, dry_run: bool, model: str | None) -> None:
     bootstrap(db_path)
     conn = get_connection(db_path)
     try:
+        t0 = time.monotonic()
         exit_code = enrich_nodes(conn, model=model, dry_run=dry_run)
+        elapsed = time.monotonic() - t0
+        click.echo(f"[PHASE 3] Done in {elapsed:.1f}s", err=True)
     finally:
         conn.close()
     if exit_code:

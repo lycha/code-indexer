@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import Any
 
 import click
+import tree_sitter_java as tsjava
 import tree_sitter_kotlin as tskotlin
+import tree_sitter_ruby as tsruby
 import tree_sitter_typescript as tstypescript
 from tree_sitter import Language, Parser as TSParser
 
@@ -109,13 +111,13 @@ _EXTENSION_TO_LANGUAGE: dict[str, str] = {
     ".kt": "kotlin",
     ".ts": "typescript",
     ".tsx": "typescript",
+    ".java": "java",
+    ".rb": "ruby",
 }
 
 _UNSUPPORTED_EXTENSIONS: dict[str, str] = {
-    ".java": "java",
     ".go": "go",
     ".rs": "rust",
-    ".rb": "ruby",
     ".c": "c",
     ".cpp": "cpp",
     ".cs": "csharp",
@@ -150,6 +152,8 @@ def detect_language(path: Path) -> str | None:
 _KT_LANGUAGE: Language | None = None
 _TS_LANGUAGE: Language | None = None
 _TSX_LANGUAGE: Language | None = None
+_JAVA_LANGUAGE: Language | None = None
+_RUBY_LANGUAGE: Language | None = None
 
 
 def _get_kotlin_language() -> Language:
@@ -171,6 +175,20 @@ def _get_tsx_language() -> Language:
     if _TSX_LANGUAGE is None:
         _TSX_LANGUAGE = Language(tstypescript.language_tsx())
     return _TSX_LANGUAGE
+
+
+def _get_java_language() -> Language:
+    global _JAVA_LANGUAGE
+    if _JAVA_LANGUAGE is None:
+        _JAVA_LANGUAGE = Language(tsjava.language())
+    return _JAVA_LANGUAGE
+
+
+def _get_ruby_language() -> Language:
+    global _RUBY_LANGUAGE
+    if _RUBY_LANGUAGE is None:
+        _RUBY_LANGUAGE = Language(tsruby.language())
+    return _RUBY_LANGUAGE
 
 
 # ---------------------------------------------------------------------------
@@ -578,6 +596,355 @@ def _parse_typescript_file(
     return nodes
 
 
+def _java_get_signature(node, source: str) -> str | None:
+    """Extract method/constructor signature from a Java method_declaration or constructor_declaration."""
+    params_node = node.child_by_field_name("parameters")
+    if params_node is None:
+        return None
+    params_text = source[params_node.start_byte : params_node.end_byte]
+    ret_type = node.child_by_field_name("type")
+    if ret_type:
+        ret_text = source[ret_type.start_byte : ret_type.end_byte]
+        return f"{params_text}: {ret_text}"
+    return params_text
+
+
+def _java_get_docstring(node, source: str) -> str | None:
+    """Extract Javadoc comment preceding a node."""
+    prev = node.prev_named_sibling
+    if prev and prev.type == "block_comment":
+        text = source[prev.start_byte : prev.end_byte]
+        if text.startswith("/**"):
+            lines = text.splitlines()
+            cleaned = []
+            for line in lines:
+                line = line.strip()
+                if line in ("/**", "*/"):
+                    continue
+                if line.startswith("* "):
+                    cleaned.append(line[2:])
+                elif line.startswith("*"):
+                    cleaned.append(line[1:].lstrip())
+                else:
+                    cleaned.append(line)
+            return "\n".join(cleaned).strip() or None
+    return None
+
+
+def _parse_java_file(
+    path: Path,
+    repo_root: Path,
+    source: str,
+    token_limit: int = 512,
+) -> list[dict[str, Any]]:
+    """Parse a Java file using tree-sitter and extract nodes."""
+    rel_path = path.relative_to(repo_root).as_posix()
+    source_lines = source.splitlines()
+    lang = _get_java_language()
+    parser = TSParser(lang)
+    tree = parser.parse(bytes(source, "utf8"))
+    root = tree.root_node
+
+    nodes: list[dict[str, Any]] = []
+
+    file_hash = _sha256(source)
+    nodes.append({
+        "id": f"{rel_path}::file::{rel_path}",
+        "file_path": rel_path,
+        "node_type": "file",
+        "name": path.name,
+        "qualified_name": rel_path,
+        "signature": None,
+        "docstring": None,
+        "start_line": 1,
+        "end_line": len(source_lines),
+        "language": "java",
+        "raw_source": source,
+        "content_hash": file_hash,
+    })
+
+    def _extract_java_nodes(parent_node, class_name: str | None = None):
+        for child in parent_node.children:
+            if child.type in ("class_declaration", "interface_declaration", "enum_declaration"):
+                name = _ts_get_name(child)
+                if not name:
+                    continue
+                if child.type == "interface_declaration":
+                    node_type = "interface"
+                elif child.type == "enum_declaration":
+                    node_type = "class"
+                else:
+                    node_type = "class"
+                start_line = child.start_point[0] + 1
+                end_line = child.end_point[0] + 1
+                raw = _get_source_segment(source_lines, start_line, end_line)
+                docstring = _java_get_docstring(child, source)
+                qname = f"{class_name}.{name}" if class_name else name
+                nodes.append({
+                    "id": f"{rel_path}::{node_type}::{qname}",
+                    "file_path": rel_path,
+                    "node_type": node_type,
+                    "name": name,
+                    "qualified_name": qname,
+                    "signature": None,
+                    "docstring": docstring,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "language": "java",
+                    "raw_source": raw,
+                    "content_hash": _sha256(raw),
+                })
+                body = child.child_by_field_name("body")
+                if body:
+                    _extract_java_nodes(body, name)
+
+            elif child.type in ("method_declaration", "constructor_declaration"):
+                name = _ts_get_name(child)
+                if not name:
+                    continue
+                start_line = child.start_point[0] + 1
+                end_line = child.end_point[0] + 1
+                raw = _get_source_segment(source_lines, start_line, end_line)
+                sig = _java_get_signature(child, source)
+                docstring = _java_get_docstring(child, source)
+                if class_name:
+                    node_type = "method"
+                    qname = f"{class_name}.{name}"
+                else:
+                    node_type = "function"
+                    qname = name
+                node_dict = {
+                    "id": f"{rel_path}::{node_type}::{qname}",
+                    "file_path": rel_path,
+                    "node_type": node_type,
+                    "name": name,
+                    "qualified_name": qname,
+                    "signature": sig,
+                    "docstring": docstring,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "language": "java",
+                    "raw_source": raw,
+                    "content_hash": _sha256(raw),
+                }
+                if _estimate_tokens(raw) > token_limit:
+                    nodes.append(node_dict)
+                    _chunk_treesitter_node(node_dict, source_lines, token_limit, child, nodes)
+                else:
+                    nodes.append(node_dict)
+
+    _extract_java_nodes(root)
+    return nodes
+
+
+def _ruby_get_signature(node, source: str) -> str | None:
+    """Extract method signature from a Ruby method or singleton_method node."""
+    params_node = node.child_by_field_name("parameters")
+    if params_node is None:
+        return None
+    return source[params_node.start_byte : params_node.end_byte]
+
+
+def _ruby_get_docstring(node, source: str) -> str | None:
+    """Extract preceding comment block as docstring (RDoc/YARD style).
+
+    First tries tree-sitter prev_named_sibling. Falls back to scanning
+    raw source lines above the node for consecutive # comments.
+    """
+    comments: list[str] = []
+    prev = node.prev_named_sibling
+    while prev and prev.type == "comment":
+        comments.insert(0, source[prev.start_byte : prev.end_byte])
+        prev = prev.prev_named_sibling
+
+    if not comments:
+        source_lines = source.splitlines()
+        line_idx = node.start_point[0] - 1
+        while line_idx >= 0:
+            stripped = source_lines[line_idx].strip()
+            if stripped.startswith("#"):
+                comments.insert(0, stripped)
+                line_idx -= 1
+            elif stripped == "":
+                break
+            else:
+                break
+
+    if not comments:
+        return None
+    cleaned = []
+    for line in comments:
+        line = line.lstrip("#").strip()
+        cleaned.append(line)
+    return "\n".join(cleaned).strip() or None
+
+
+def _parse_ruby_file(
+    path: Path,
+    repo_root: Path,
+    source: str,
+    token_limit: int = 512,
+) -> list[dict[str, Any]]:
+    """Parse a Ruby file using tree-sitter and extract nodes."""
+    rel_path = path.relative_to(repo_root).as_posix()
+    source_lines = source.splitlines()
+    lang = _get_ruby_language()
+    parser = TSParser(lang)
+    tree = parser.parse(bytes(source, "utf8"))
+    root = tree.root_node
+
+    nodes: list[dict[str, Any]] = []
+
+    file_hash = _sha256(source)
+    nodes.append({
+        "id": f"{rel_path}::file::{rel_path}",
+        "file_path": rel_path,
+        "node_type": "file",
+        "name": path.name,
+        "qualified_name": rel_path,
+        "signature": None,
+        "docstring": None,
+        "start_line": 1,
+        "end_line": len(source_lines),
+        "language": "ruby",
+        "raw_source": source,
+        "content_hash": file_hash,
+    })
+
+    def _extract_ruby_nodes(parent_node, class_name: str | None = None):
+        for child in parent_node.children:
+            if child.type == "class":
+                name_node = child.child_by_field_name("name")
+                if not name_node:
+                    continue
+                name = name_node.text.decode("utf8")
+                start_line = child.start_point[0] + 1
+                end_line = child.end_point[0] + 1
+                raw = _get_source_segment(source_lines, start_line, end_line)
+                docstring = _ruby_get_docstring(child, source)
+                qname = f"{class_name}.{name}" if class_name else name
+                nodes.append({
+                    "id": f"{rel_path}::class::{qname}",
+                    "file_path": rel_path,
+                    "node_type": "class",
+                    "name": name,
+                    "qualified_name": qname,
+                    "signature": None,
+                    "docstring": docstring,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "language": "ruby",
+                    "raw_source": raw,
+                    "content_hash": _sha256(raw),
+                })
+                body = child.child_by_field_name("body")
+                if body:
+                    _extract_ruby_nodes(body, name)
+
+            elif child.type == "module":
+                name_node = child.child_by_field_name("name")
+                if not name_node:
+                    continue
+                name = name_node.text.decode("utf8")
+                start_line = child.start_point[0] + 1
+                end_line = child.end_point[0] + 1
+                raw = _get_source_segment(source_lines, start_line, end_line)
+                docstring = _ruby_get_docstring(child, source)
+                qname = f"{class_name}.{name}" if class_name else name
+                nodes.append({
+                    "id": f"{rel_path}::class::{qname}",
+                    "file_path": rel_path,
+                    "node_type": "class",
+                    "name": name,
+                    "qualified_name": qname,
+                    "signature": None,
+                    "docstring": docstring,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "language": "ruby",
+                    "raw_source": raw,
+                    "content_hash": _sha256(raw),
+                })
+                body = child.child_by_field_name("body")
+                if body:
+                    _extract_ruby_nodes(body, name)
+
+            elif child.type == "method":
+                name_node = child.child_by_field_name("name")
+                if not name_node:
+                    continue
+                name = name_node.text.decode("utf8")
+                start_line = child.start_point[0] + 1
+                end_line = child.end_point[0] + 1
+                raw = _get_source_segment(source_lines, start_line, end_line)
+                sig = _ruby_get_signature(child, source)
+                docstring = _ruby_get_docstring(child, source)
+                if class_name:
+                    node_type = "method"
+                    qname = f"{class_name}.{name}"
+                else:
+                    node_type = "function"
+                    qname = name
+                node_dict = {
+                    "id": f"{rel_path}::{node_type}::{qname}",
+                    "file_path": rel_path,
+                    "node_type": node_type,
+                    "name": name,
+                    "qualified_name": qname,
+                    "signature": sig,
+                    "docstring": docstring,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "language": "ruby",
+                    "raw_source": raw,
+                    "content_hash": _sha256(raw),
+                }
+                if _estimate_tokens(raw) > token_limit:
+                    nodes.append(node_dict)
+                    _chunk_treesitter_node(node_dict, source_lines, token_limit, child, nodes)
+                else:
+                    nodes.append(node_dict)
+
+            elif child.type == "singleton_method":
+                name_node = child.child_by_field_name("name")
+                if not name_node:
+                    continue
+                name = name_node.text.decode("utf8")
+                start_line = child.start_point[0] + 1
+                end_line = child.end_point[0] + 1
+                raw = _get_source_segment(source_lines, start_line, end_line)
+                sig = _ruby_get_signature(child, source)
+                docstring = _ruby_get_docstring(child, source)
+                if class_name:
+                    node_type = "method"
+                    qname = f"{class_name}.{name}"
+                else:
+                    node_type = "function"
+                    qname = name
+                node_dict = {
+                    "id": f"{rel_path}::{node_type}::{qname}",
+                    "file_path": rel_path,
+                    "node_type": node_type,
+                    "name": name,
+                    "qualified_name": qname,
+                    "signature": sig,
+                    "docstring": docstring,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "language": "ruby",
+                    "raw_source": raw,
+                    "content_hash": _sha256(raw),
+                }
+                if _estimate_tokens(raw) > token_limit:
+                    nodes.append(node_dict)
+                    _chunk_treesitter_node(node_dict, source_lines, token_limit, child, nodes)
+                else:
+                    nodes.append(node_dict)
+
+    _extract_ruby_nodes(root)
+    return nodes
+
+
 def _extract_ts_methods_from_interface(
     body_node, interface_name: str, rel_path: str, source: str,
     source_lines: list[str], token_limit: int, nodes: list[dict[str, Any]],
@@ -827,6 +1194,10 @@ def parse_file(
         return _parse_kotlin_file(path, repo_root, source, token_limit)
     elif language == "typescript":
         return _parse_typescript_file(path, repo_root, source, token_limit)
+    elif language == "java":
+        return _parse_java_file(path, repo_root, source, token_limit)
+    elif language == "ruby":
+        return _parse_ruby_file(path, repo_root, source, token_limit)
 
     # Python path (original)
     rel_path = path.relative_to(repo_root).as_posix()
@@ -945,86 +1316,93 @@ def parse_directory(
     if exclude_patterns:
         gitignore_patterns.extend(exclude_patterns)
 
+    # Collect candidate files first for progress reporting
+    candidate_files: list[tuple[Path, str]] = []
     for dirpath, dirnames, filenames in os.walk(repo_root):
-        # Skip hidden directories and __pycache__
         dirnames[:] = [
             d for d in dirnames
             if not d.startswith(".") and d != "__pycache__"
         ]
-
         for filename in filenames:
             file_path = Path(dirpath) / filename
-
-            # Detect language from extension
             language = detect_language(file_path)
             if language is None:
                 continue
-
             if _is_ignored(file_path, repo_root, gitignore_patterns):
                 continue
+            candidate_files.append((file_path, language))
 
-            rel_path = file_path.relative_to(repo_root).as_posix()
+    total_files = len(candidate_files)
+    processed = 0
+    skipped_unchanged = 0
 
-            # Incremental detection: check file content hash
-            file_content = file_path.read_bytes()
-            file_hash = hashlib.sha256(file_content).hexdigest()
+    for file_path, language in candidate_files:
+        rel_path = file_path.relative_to(repo_root).as_posix()
 
-            existing = conn.execute(
-                "SELECT content_hash FROM files WHERE path = ?",
-                (rel_path,),
-            ).fetchone()
+        # Incremental detection: check file content hash
+        file_content = file_path.read_bytes()
+        file_hash = hashlib.sha256(file_content).hexdigest()
 
-            if existing and existing[0] == file_hash:
-                # File unchanged, skip
-                continue
+        existing = conn.execute(
+            "SELECT content_hash FROM files WHERE path = ?",
+            (rel_path,),
+        ).fetchone()
 
-            # Parse the file
-            nodes = parse_file(file_path, conn, repo_root, token_limit=token_limit)
+        if existing and existing[0] == file_hash:
+            skipped_unchanged += 1
+            continue
 
-            if not nodes:
-                # Syntax error or empty file - parse_file already logged warning
-                warnings.append(f"Skipped: {rel_path}")
-                continue
+        processed += 1
 
-            # Delete old nodes for this file
-            conn.execute("DELETE FROM nodes WHERE file_path = ?", (rel_path,))
+        # Parse the file
+        nodes = parse_file(file_path, conn, repo_root, token_limit=token_limit)
 
-            # Insert new nodes; clear enriched_at to NULL
-            for node in nodes:
-                conn.execute(
-                    """INSERT OR REPLACE INTO nodes
-                    (id, file_path, node_type, name, qualified_name, signature,
-                     docstring, start_line, end_line, language, raw_source,
-                     content_hash, enriched_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)""",
-                    (
-                        node["id"],
-                        node["file_path"],
-                        node["node_type"],
-                        node["name"],
-                        node["qualified_name"],
-                        node.get("signature"),
-                        node.get("docstring"),
-                        node["start_line"],
-                        node["end_line"],
-                        node["language"],
-                        node["raw_source"],
-                        node["content_hash"],
-                    ),
-                )
+        if not nodes:
+            warnings.append(f"Skipped: {rel_path}")
+            continue
 
-            # Upsert files table
-            now = datetime.now(timezone.utc).isoformat()
-            last_modified = datetime.fromtimestamp(
-                file_path.stat().st_mtime, tz=timezone.utc
-            ).isoformat()
+        # Delete old nodes for this file
+        conn.execute("DELETE FROM nodes WHERE file_path = ?", (rel_path,))
+
+        # Insert new nodes; clear enriched_at to NULL
+        for node in nodes:
             conn.execute(
-                """INSERT OR REPLACE INTO files
-                (path, last_modified, content_hash, language, node_count, indexed_at)
-                VALUES (?, ?, ?, ?, ?, ?)""",
-                (rel_path, last_modified, file_hash, language, len(nodes), now),
+                """INSERT OR REPLACE INTO nodes
+                (id, file_path, node_type, name, qualified_name, signature,
+                 docstring, start_line, end_line, language, raw_source,
+                 content_hash, enriched_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)""",
+                (
+                    node["id"],
+                    node["file_path"],
+                    node["node_type"],
+                    node["name"],
+                    node["qualified_name"],
+                    node.get("signature"),
+                    node.get("docstring"),
+                    node["start_line"],
+                    node["end_line"],
+                    node["language"],
+                    node["raw_source"],
+                    node["content_hash"],
+                ),
             )
 
-            conn.commit()
+        # Upsert files table
+        now = datetime.now(timezone.utc).isoformat()
+        last_modified = datetime.fromtimestamp(
+            file_path.stat().st_mtime, tz=timezone.utc
+        ).isoformat()
+        conn.execute(
+            """INSERT OR REPLACE INTO files
+            (path, last_modified, content_hash, language, node_count, indexed_at)
+            VALUES (?, ?, ?, ?, ?, ?)""",
+            (rel_path, last_modified, file_hash, language, len(nodes), now),
+        )
+
+        conn.commit()
+
+    if skipped_unchanged:
+        click.echo(f"[PHASE 1] Skipped {skipped_unchanged} unchanged files", err=True)
 
     return warnings

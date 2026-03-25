@@ -221,9 +221,10 @@ def enrich_nodes(conn, model=None, dry_run=False):
         return 0
 
     enriched_count = 0
-    for node_row in nodes:
+    for node_idx, node_row in enumerate(nodes, 1):
         node_id = node_row[0]
         qualified_name = node_row[4]
+        click.echo(f"[ENRICH] Processing node {node_idx}/{count}: {qualified_name}", err=True)
         try:
             context = build_node_context(node_id, conn)
             prompt = _build_prompt(node_row, context)

@@ -195,29 +195,33 @@ class TestOverridesEdgeType:
                      "process", "Child.process", 15, 20)
 
         source = {"node_type": "method", "name": "process", "qualified_name": "Child.process"}
-        edge_type = _classify_edge_type(source, "a.py::method::Base.process", "process", db_conn)
+        from indexer.mapper import _NodeIndex
+        idx = _NodeIndex(db_conn)
+        edge_type = _classify_edge_type(source, "a.py::method::Base.process", "process", idx)
         assert edge_type == "overrides"
 
     def test_no_override_for_different_names(self, db_conn):
         """Methods with different names are not classified as 'overrides'."""
-        from indexer.mapper import _classify_edge_type
+        from indexer.mapper import _classify_edge_type, _NodeIndex
 
         _insert_node(db_conn, "a.py::method::Base.process", "a.py", "method",
                      "process", "Base.process", 5, 10)
 
         source = {"node_type": "method", "name": "handle", "qualified_name": "Child.handle"}
-        edge_type = _classify_edge_type(source, "a.py::method::Base.process", "process", db_conn)
+        idx = _NodeIndex(db_conn)
+        edge_type = _classify_edge_type(source, "a.py::method::Base.process", "process", idx)
         assert edge_type == "calls"  # falls through to calls since target is method
 
     def test_no_override_for_same_qualified_name(self, db_conn):
         """Same qualified_name means same method, not an override."""
-        from indexer.mapper import _classify_edge_type
+        from indexer.mapper import _classify_edge_type, _NodeIndex
 
         _insert_node(db_conn, "a.py::method::Base.process", "a.py", "method",
                      "process", "Base.process", 5, 10)
 
         source = {"node_type": "method", "name": "process", "qualified_name": "Base.process"}
-        edge_type = _classify_edge_type(source, "a.py::method::Base.process", "process", db_conn)
+        idx = _NodeIndex(db_conn)
+        edge_type = _classify_edge_type(source, "a.py::method::Base.process", "process", idx)
         # Same qualified name - not an override, falls through to calls
         assert edge_type == "calls"
 

@@ -27,7 +27,133 @@ index enrich
 index query "validateCartState"
 ```
 
+## Tutorial
+
+This walkthrough indexes a real project from scratch and shows how to use every major feature.
+
+### Step 1: Install and verify prerequisites
+
+```bash
+pip install -e .
+
+# Install ripgrep and other external dependencies automatically
+index install
+```
+
+### Step 2: Index your project
+
+Navigate to your project root and run the full pipeline:
+
+```bash
+cd /path/to/your/project
+
+# Build the index (init is automatic)
+index build
+```
+
+This creates a `.codeindex/` directory containing the SQLite database. The build runs two phases: AST parsing extracts every file, class, function, and method, then ripgrep maps all call-site and import relationships between them.
+
+To exclude vendored or generated code:
+
+```bash
+index build --exclude "vendor/*" --exclude "generated/*"
+```
+
+### Step 3: Check index health
+
+```bash
+index status
+```
+
+Example output:
+
+```
+Nodes:            142
+Edges:            387
+Unenriched:       142
+Last build:       2026-03-25T10:15:00+00:00
+Schema version:   3
+DB path:          .codeindex/codeindex.db
+```
+
+The `Unenriched: 142` line means no nodes have semantic metadata yet — that comes next.
+
+### Step 4: Enrich with LLM metadata (optional)
+
+This step calls the Claude API to generate summaries, domain tags, and inferred responsibilities for each node. It requires an API key:
+
+```bash
+export ANTHROPIC_API_KEY="sk-..."
+
+# Preview what will be enriched
+index enrich --dry-run
+
+# Run enrichment
+index enrich
+```
+
+Enrichment is hash-gated: re-running `index enrich` after code changes only processes nodes whose content actually changed.
+
+### Step 5: Query the index
+
+**Find a symbol by name** (lexical search):
+
+```bash
+index query "UserService"
+```
+
+**Explore a node's dependency graph**:
+
+```bash
+index query "UserService.validate" --type graph --depth 3
+```
+
+**Ask a natural-language question** (semantic search — requires enrichment):
+
+```bash
+index query "where is authentication handled" --type semantic
+```
+
+**Get machine-readable output for scripts or agents**:
+
+```bash
+index query "CartService" --format json --with-source
+```
+
+The query router automatically picks the best strategy (lexical, graph, or semantic) when `--type` is omitted, and falls back to an alternative strategy if the first returns no results.
+
+### Step 6: Rebuild after code changes
+
+```bash
+index build
+```
+
+The build is incremental at the enrichment layer — only changed nodes need re-enrichment. To start completely fresh:
+
+```bash
+index reset --yes
+index build
+```
+
+### Typical workflow summary
+
+```bash
+index build                          # parse + map dependencies
+index enrich                         # add semantic metadata (optional)
+index query "MyClass"                # find symbols
+index query "how does auth work"     # semantic search
+index status                         # check health
+```
+
 ## Commands
+
+### `index install`
+
+Install external dependencies required by the indexer. Currently installs [ripgrep](https://github.com/BurntSushi/ripgrep) using the system package manager (Homebrew on macOS, apt/dnf/pacman on Linux, Chocolatey/Scoop on Windows). No-op if all dependencies are already present.
+
+```bash
+index install
+```
 
 ### `index init`
 
@@ -135,6 +261,8 @@ All progress and diagnostic output goes to **stderr**; only structured query res
 | Python | `ast` (stdlib) |
 | Kotlin | `tree-sitter-kotlin` |
 | TypeScript | `tree-sitter-typescript` |
+| Java | `tree-sitter-java` |
+| Ruby | `tree-sitter-ruby` |
 
 ## Environment Variables
 
