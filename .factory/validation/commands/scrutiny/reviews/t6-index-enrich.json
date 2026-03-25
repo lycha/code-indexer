@@ -1,0 +1,15 @@
+{
+  "featureId": "t6-index-enrich",
+  "reviewedAt": "2026-03-25T15:00:00Z",
+  "commitId": "c59aa91",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "Implementation and tests cover enrichment behavior, retry logic, dry-run, model override, and FTS/meta updates with no blocking defects identified.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed t6-index-enrich commit c59aa91 and associated tests; behavior aligns with milestone requirements and validators are green."
+}

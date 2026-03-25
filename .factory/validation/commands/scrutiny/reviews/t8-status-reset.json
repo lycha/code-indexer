@@ -1,0 +1,15 @@
+{
+  "featureId": "t8-status-reset",
+  "reviewedAt": "2026-03-25T15:00:00Z",
+  "commitId": "f3f5e7a",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "Status/reset command behavior, exit codes, non-TTY safety checks, and schema recreation are implemented and well tested without blocking concerns.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed t8-status-reset commit f3f5e7a and related tests; scrutiny result is pass."
+}

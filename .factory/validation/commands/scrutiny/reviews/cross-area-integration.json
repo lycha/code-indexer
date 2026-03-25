@@ -1,0 +1,51 @@
+{
+  "featureId": "cross-area-integration",
+  "reviewedAt": "2026-03-25T14:39:15Z",
+  "commitId": "75e98ef",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature adds broad integration coverage, but several assertions are too weak to verify required behaviors in the feature contract.",
+    "issues": [
+      {
+        "file": "tests/test_integration.py",
+        "line": 168,
+        "severity": "blocking",
+        "description": "Hash-gating test only checks `unenriched_after > 0`, which does not validate the requirement that only changed nodes are marked for re-enrichment; it can pass even if unchanged nodes are also cleared."
+      },
+      {
+        "file": "tests/test_integration.py",
+        "line": 202,
+        "severity": "blocking",
+        "description": "DB path consistency test covers init/build/status/query/reset but omits enrich, while the feature requires DB path consistency across all commands."
+      },
+      {
+        "file": "tests/test_integration.py",
+        "line": 440,
+        "severity": "blocking",
+        "description": "Cross-language edge validation asserts only `edges > 0`, which does not prove edges exist across language boundaries; same-language edges would also satisfy this."
+      },
+      {
+        "file": "tests/test_integration.py",
+        "line": 25,
+        "severity": "non_blocking",
+        "description": "Test helper hardcodes `/Users/kjackowski/.factory/bin` into PATH, reducing portability across environments."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The python-cli-worker skill requires explicit manual verification (step 6), but the transcript skeleton for this session shows only automated test commands before commit while handoff marks `followedProcedure: true`.",
+      "evidence": "worker-transcripts.jsonl entry for session 3520e7af-29dd-4953-8f93-2bc076c0d69a shows pytest runs and commit flow without separate manual CLI verification commands; handoff.skillFeedback.followedProcedure=true."
+    },
+    {
+      "area": "conventions",
+      "observation": "There is no explicit shared convention documenting that tests should avoid machine-specific absolute paths; this allowed a hardcoded PATH entry in integration tests.",
+      "evidence": "tests/test_integration.py:25 hardcodes `/Users/kjackowski/.factory/bin`; AGENTS.md and .factory/library docs do not define a portability rule for test-time PATH handling."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed feature cross-area-integration for commit 75e98ef using handoff, transcript skeleton, diff, and shared-state docs. Result is fail due to three blocking coverage-quality gaps: hash-gating specificity, missing enrich in DB-path consistency checks, and insufficient proof of cross-language edges."
+}

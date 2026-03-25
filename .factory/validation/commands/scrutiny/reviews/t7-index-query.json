@@ -1,0 +1,15 @@
+{
+  "featureId": "t7-index-query",
+  "reviewedAt": "2026-03-25T15:00:00Z",
+  "commitId": "3cc380d",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "Query routing, lexical/graph/semantic search paths, output formatting, and fallback behavior are extensively covered and no blocking issues were found.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed t7-index-query commit 3cc380d and tests; implementation quality is acceptable for scrutiny pass."
+}

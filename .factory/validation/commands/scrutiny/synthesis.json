@@ -1,0 +1,64 @@
+{
+  "milestone": "commands",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "python3 -m pytest tests/ -v",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "echo \"No typecheck configured - pure Python project\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "python3 -m pytest tests/ -v --tb=short",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 4,
+    "passed": 3,
+    "failed": 1,
+    "failedFeatures": [
+      "cross-area-integration"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "cross-area-integration",
+      "severity": "blocking",
+      "description": "Hash-gating test only checks `unenriched_after > 0`, which does not validate that only changed nodes are marked for re-enrichment."
+    },
+    {
+      "featureId": "cross-area-integration",
+      "severity": "blocking",
+      "description": "DB path consistency test omits `index enrich`, leaving required command coverage incomplete."
+    },
+    {
+      "featureId": "cross-area-integration",
+      "severity": "blocking",
+      "description": "Cross-language edge test asserts only `edges > 0`, which does not prove edges exist across language boundaries."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "skills",
+      "suggestion": "Update python-cli-worker procedure to require explicit manual CLI verification commands (or explicitly allow validated test-only completion) before marking `followedProcedure: true`.",
+      "evidence": "cross-area-integration review observed mismatch between required manual verification step and transcript evidence.",
+      "isSystemic": false
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add portability guidance forbidding machine-specific absolute paths in tests (e.g., use env setup/helpers instead).",
+      "evidence": "cross-area-integration review found hardcoded `/Users/kjackowski/.factory/bin` PATH in tests/test_integration.py.",
+      "isSystemic": false
+    }
+  ],
+  "rejectedObservations": [],
+  "previousRound": null
+}
