@@ -1,0 +1,126 @@
+{
+  "surface": "cli",
+  "assertionResults": [
+    {
+      "id": "VAL-CLI-001",
+      "status": "pass",
+      "reason": "CLI help lists all subcommands",
+      "evidence": {
+        "cmd": "index --help",
+        "code": 0,
+        "stdout": "Usage: index [OPTIONS] COMMAND [ARGS]...\n\n  Hybrid code indexing system \u2014 build, enrich, and query a code index.\n\nOptions:\n  --db PATH  Path to the SQLite database file.\n  --help     Show this message and exit.\n\nCommands:\n  build   Parse source files and map dependencies.\n  enrich  Enrich code nodes with LLM-generated semantic metadata.\n  init    Initialise the code index database.\n  query   Query the code index.\n  reset   Reset the code index by dropping and recreating all tables.\n  status  Show index status and statistics.\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "VAL-CLI-002",
+      "status": "fail",
+      "reason": "Stub [TODO] behavior across subcommands",
+      "evidence": [
+        {
+          "cmd": "index init",
+          "code": 0,
+          "stdout": "",
+          "stderr": "[SETUP] Applied migration 001_initial.sql (v1)\n[SETUP] Added .codeindex/ to .gitignore\n"
+        },
+        {
+          "cmd": "index build",
+          "code": 0,
+          "stdout": "",
+          "stderr": "[TODO] build not yet implemented\n"
+        },
+        {
+          "cmd": "index enrich",
+          "code": 0,
+          "stdout": "",
+          "stderr": "[TODO] enrich not yet implemented\n"
+        },
+        {
+          "cmd": "index query ",
+          "code": 0,
+          "stdout": "",
+          "stderr": "[TODO] query not yet implemented\n"
+        },
+        {
+          "cmd": "index status",
+          "code": 0,
+          "stdout": "",
+          "stderr": "[TODO] status not yet implemented\n"
+        },
+        {
+          "cmd": "index reset --yes",
+          "code": 0,
+          "stdout": "",
+          "stderr": "[TODO] reset not yet implemented\n"
+        }
+      ]
+    },
+    {
+      "id": "VAL-CLI-003",
+      "status": "pass",
+      "reason": "Global --db propagated to init handler",
+      "evidence": [
+        {
+          "cmd": "index --db /tmp/codeindex-ut-cli/custom.db init --no-gitignore-update",
+          "code": 0,
+          "stdout": "",
+          "stderr": "[SETUP] Applied migration 001_initial.sql (v1)\n"
+        },
+        {
+          "db_exists": true
+        }
+      ]
+    },
+    {
+      "id": "VAL-CLI-004",
+      "status": "pass",
+      "reason": "Package installable and index on PATH",
+      "evidence": [
+        {
+          "cmd": "python3 -m pip install -e /Users/kjackowski/IdeaProjects/ai-os/code-indexer",
+          "code": 0,
+          "stdout": "Obtaining file:///Users/kjackowski/IdeaProjects/ai-os/code-indexer\n  Installing build dependencies: started\n  Installing build dependencies: finished with status 'done'\n  Checking if build backend supports build_editable: started\n  Checking if build backend supports build_editable: finished with status 'done'\n  Getting requirements to build editable: started\n  Getting requirements to build editable: finished with status 'done'\n  Preparing editable metadata (pyproject.toml): started\n  Preparing editable metadata (pyproject.toml): finished with status 'done'\nRequirement already satisfied: click>=8.1 in /Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages (from code-indexer==0.1.0) (8.3.1)\nBuilding wheels for collected packages: code-indexer\n  Building editable for code-indexer (pyproject.toml): started\n  Building editable for code-indexer (pyproject.toml): finished with status 'done'\n  Created wheel for code-indexer: filename=code_indexer-0.1.0-0.editable-py3-none-any.whl size=3097 sha256=dbc4a74f9f098b55c2122133b70372e9fa4d9dbacf44df197a53f10a93821316\n  Stored in directory: /private/var/folders/_z/nzmlfccx22l25z2y088c_lzh0000gr/T/pip-ephem-wheel-cache-njxn07u2/wheels/0c/a5/b9/22c7307654551e3ff9931d47fcb1b3dfd9787ae18f69f6683c\nSuccessfully built code-indexer\nInstalling collected packages: code-indexer\n  Attempting uninstall: code-indexer\n    Found existing installation: code-indexer 0.1.0\n    Uninstalling code-indexer-0.1.0:\n      Successfully uninstalled code-indexer-0.1.0\nSuccessfully installed code-indexer-0.1.0\n",
+          "stderr": "\n[notice] A new release of pip is available: 24.3.1 -> 26.0.1\n[notice] To update, run: pip install --upgrade pip\n"
+        },
+        {
+          "cmd": "which index",
+          "code": 0,
+          "stdout": "/Library/Frameworks/Python.framework/Versions/3.13/bin/index\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "id": "VAL-CLI-005",
+      "status": "pass",
+      "reason": "Subcommand help includes build options",
+      "evidence": {
+        "cmd": "index build --help",
+        "code": 0,
+        "stdout": "Usage: index build [OPTIONS]\n\n  Parse source files and map dependencies.\n\nOptions:\n  --phase [PREPARE|DEPLOY]  Phase boundary tag.\n  --token-limit INTEGER     Token limit for cAST chunking.\n  --exclude TEXT            Glob patterns to exclude from parsing.\n  --help                    Show this message and exit.\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "VAL-CLI-006",
+      "status": "pass",
+      "reason": "--no-gitignore-update suppresses .gitignore modification",
+      "evidence": [
+        {
+          "cmd": "index --db /tmp/codeindex-ut-cli-mini/x.db init --no-gitignore-update",
+          "code": 0,
+          "stdout": "",
+          "stderr": "[SETUP] Applied migration 001_initial.sql (v1)\n"
+        },
+        {
+          "gitignore": "node_modules/\n"
+        }
+      ]
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": [
+    "Execute"
+  ]
+}

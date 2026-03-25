@@ -1,0 +1,184 @@
+{
+  "surface": "db",
+  "assertionResults": [
+    {
+      "id": "VAL-DB-001",
+      "status": "pass",
+      "reason": "Fresh bootstrap creates DB and schema_version=1",
+      "evidence": [
+        {
+          "cmd": "index init",
+          "code": 0,
+          "stdout": "",
+          "stderr": "[SETUP] Applied migration 001_initial.sql (v1)\n[SETUP] Added .codeindex/ to .gitignore\n"
+        },
+        {
+          "db_exists": true,
+          "schema_version": "1"
+        }
+      ]
+    },
+    {
+      "id": "VAL-DB-002",
+      "status": "pass",
+      "reason": "Schema tables present",
+      "evidence": {
+        "tables": [
+          "edges",
+          "files",
+          "index_meta",
+          "nodes",
+          "nodes_fts",
+          "nodes_fts_config",
+          "nodes_fts_data",
+          "nodes_fts_docsize",
+          "nodes_fts_idx"
+        ]
+      }
+    },
+    {
+      "id": "VAL-DB-003",
+      "status": "pass",
+      "reason": "get_connection enables WAL and foreign keys",
+      "evidence": {
+        "cmd_exit": 0,
+        "stdout": "wal\n1\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "VAL-DB-004",
+      "status": "pass",
+      "reason": "Init idempotent",
+      "evidence": {
+        "cmd": "index init",
+        "code": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "VAL-DB-005",
+      "status": "fail",
+      "reason": "Pending migration upgrade path works",
+      "evidence": [
+        {
+          "cmd": "index init",
+          "code": 1,
+          "stdout": "",
+          "stderr": "Traceback (most recent call last):\n  File \u001b[35m\"/Library/Frameworks/Python.framework/Versions/3.13/bin/index\"\u001b[0m, line \u001b[35m8\u001b[0m, in \u001b[35m<module>\u001b[0m\n    sys.exit(\u001b[31mcli\u001b[0m\u001b[1;31m()\u001b[0m)\n             \u001b[31m~~~\u001b[0m\u001b[1;31m^^\u001b[0m\n  File \u001b[35m\"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/click/core.py\"\u001b[0m, line \u001b[35m1485\u001b[0m, in \u001b[35m__call__\u001b[0m\n    return \u001b[31mself.main\u001b[0m\u001b[1;31m(*args, **kwargs)\u001b[0m\n           \u001b[31m~~~~~~~~~\u001b[0m\u001b[1;31m^^^^^^^^^^^^^^^^^\u001b[0m\n  File \u001b[35m\"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/click/core.py\"\u001b[0m, line \u001b[35m1406\u001b[0m, in \u001b[35mmain\u001b[0m\n    rv = self.invoke(ctx)\n  File \u001b[35m\"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/click/core.py\"\u001b[0m, line \u001b[35m1873\u001b[0m, in \u001b[35minvoke\u001b[0m\n    return _process_result(\u001b[31msub_ctx.command.invoke\u001b[0m\u001b[1;31m(sub_ctx)\u001b[0m)\n                           \u001b[31m~~~~~~~~~~~~~~~~~~~~~~\u001b[0m\u001b[1;31m^^^^^^^^^\u001b[0m\n  File \u001b[35m\"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/click/core.py\"\u001b[0m, line \u001b[35m1269\u001b[0m, in \u001b[35minvoke\u001b[0m\n    return \u001b[31mctx.invoke\u001b[0m\u001b[1;31m(self.callback, **ctx.params)\u001b[0m\n           \u001b[31m~~~~~~~~~~\u001b[0m\u001b[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\u001b[0m\n  File \u001b[35m\"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/click/core.py\"\u001b[0m, line \u001b[35m824\u001b[0m, in \u001b[35minvoke\u001b[0m\n    return callback(*args, **kwargs)\n  File \u001b[35m\"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/click/decorators.py\"\u001b[0m, line \u001b[35m34\u001b[0m, in \u001b[35mnew_func\u001b[0m\n    return f(get_current_context(), *args, **kwargs)\n  File \u001b[35m\"/Users/kjackowski/IdeaProjects/ai-os/code-indexer/indexer/cli.py\"\u001b[0m, line \u001b[35m49\u001b[0m, in \u001b[35minit\u001b[0m\n    \u001b[31mbootstrap\u001b[0m\u001b[1;31m(db_path)\u001b[0m\n    \u001b[31m~~~~~~~~~\u001b[0m\u001b[1;31m^^^^^^^^^\u001b[0m\n  File \u001b[35m\"/Users/kjackowski/IdeaProjects/ai-os/code-indexer/indexer/db.py\"\u001b[0m, line \u001b[35m85\u001b[0m, in \u001b[35mbootstrap\u001b[0m\n    \u001b[31mconn.executescript\u001b[0m\u001b[1;31m(sql)\u001b[0m\n    \u001b[31m~~~~~~~~~~~~~~~~~~\u001b[0m\u001b[1;31m^^^^^\u001b[0m\n\u001b[1;35msqlite3.OperationalError\u001b[0m: \u001b[35mtable nodes already exists\u001b[0m\n"
+        },
+        {
+          "schema_version_after": "0"
+        }
+      ]
+    },
+    {
+      "id": "VAL-DB-006",
+      "status": "pass",
+      "reason": "Downgrade/future schema detected",
+      "evidence": {
+        "cmd": "index init",
+        "code": 2,
+        "stdout": "",
+        "stderr": "[ERROR] Schema version mismatch: database is v999 but code supports up to v1. This database was created by a newer version of the tool. Please upgrade the tool or run 'index reset --yes' to rebuild.\n"
+      }
+    },
+    {
+      "id": "VAL-DB-007",
+      "status": "pass",
+      "reason": "DB path resolution precedence",
+      "evidence": [
+        {
+          "cmd": "index --db /tmp/codeindex-ut-db/arg.db init --no-gitignore-update",
+          "code": 0,
+          "stdout": "",
+          "stderr": "[SETUP] Applied migration 001_initial.sql (v1)\n"
+        },
+        {
+          "cmd": "index init --no-gitignore-update",
+          "code": 0,
+          "stdout": "",
+          "stderr": "[SETUP] Applied migration 001_initial.sql (v1)\n"
+        },
+        {
+          "cmd": "index init",
+          "code": 0,
+          "stdout": "",
+          "stderr": "[SETUP] Applied migration 001_initial.sql (v1)\n[SETUP] Added .codeindex/ to .gitignore\n"
+        },
+        {
+          "arg_exists": true,
+          "env_exists": true,
+          "default_exists": true
+        }
+      ]
+    },
+    {
+      "id": "VAL-DB-008",
+      "status": "pass",
+      "reason": "gitignore auto-append",
+      "evidence": [
+        {
+          "cmd": "index init",
+          "code": 0,
+          "stdout": "",
+          "stderr": "[SETUP] Applied migration 001_initial.sql (v1)\n[SETUP] Added .codeindex/ to .gitignore\n"
+        },
+        {
+          "gitignore": "*.pyc\n.codeindex/\n"
+        }
+      ]
+    },
+    {
+      "id": "VAL-DB-009",
+      "status": "pass",
+      "reason": "gitignore append idempotent",
+      "evidence": [
+        {
+          "cmd": "index init",
+          "code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "count": 1,
+          "gitignore": "*.pyc\n.codeindex/\n"
+        }
+      ]
+    },
+    {
+      "id": "VAL-DB-010",
+      "status": "pass",
+      "reason": "FTS5 external content config",
+      "evidence": {
+        "sql": "CREATE VIRTUAL TABLE nodes_fts USING fts5(\n    id UNINDEXED,\n    qualified_name,\n    semantic_summary,\n    domain_tags,\n    inferred_responsibility,\n    content=nodes,\n    content_rowid=rowid\n)"
+      }
+    },
+    {
+      "id": "VAL-DB-011",
+      "status": "pass",
+      "reason": "Node/edge CHECK constraints enforced",
+      "evidence": {
+        "node_error": "CHECK constraint failed: node_type IN ('file', 'class', 'function', 'method', 'interface', 'object')",
+        "edge_error": "CHECK constraint failed: edge_type IN ('calls', 'imports', 'inherits', 'overrides', 'references', 'instantiates')",
+        "edge_columns": [
+          "source_id",
+          "target_id",
+          "edge_type",
+          "call_site_line"
+        ]
+      }
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Subagent spawning unavailable due permissions; validations executed directly in this worker."
+    }
+  ],
+  "blockers": [],
+  "toolsUsed": [
+    "Execute",
+    "sqlite3"
+  ]
+}
