@@ -61,18 +61,18 @@ def test_query_no_input_exits_2():
     assert "ERROR" in result.stderr
 
 
-def test_status_stub():
-    """index status prints [TODO] to stderr and exits 0."""
+def test_status_shows_output():
+    """index status prints status info to stdout and exits 0."""
     result = subprocess.run(["index", "status"], capture_output=True, text=True)
     assert result.returncode == 0
-    assert "[TODO]" in result.stderr
+    assert "Nodes:" in result.stdout
 
 
-def test_reset_stub():
-    """index reset prints [TODO] to stderr and exits 0."""
+def test_reset_with_yes():
+    """index reset --yes resets and exits 0."""
     result = subprocess.run(["index", "reset", "--yes"], capture_output=True, text=True)
     assert result.returncode == 0
-    assert "[TODO]" in result.stderr
+    assert "[RESET]" in result.stderr
 
 
 def test_db_option_accepted():

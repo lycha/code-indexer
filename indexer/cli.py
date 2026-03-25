@@ -315,12 +315,94 @@ def query(ctx: click.Context, query_text: str, query_type: str | None, output_fo
 @click.pass_context
 def status(ctx: click.Context) -> None:
     """Show index status and statistics."""
-    click.echo("[TODO] status not yet implemented", err=True)
+    from indexer.db import _get_migration_files, _get_schema_version
+
+    db_path = resolve_db_path(ctx.obj.get("db_path"))
+
+    # Check if DB exists
+    if db_path != ":memory:" and not Path(db_path).exists():
+        click.echo("[INFO] Index not initialised. Run: index build", nl=True)
+        sys.exit(1)
+
+    conn = get_connection(db_path)
+    try:
+        node_count = conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
+        edge_count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+        unenriched = conn.execute(
+            "SELECT COUNT(*) FROM nodes WHERE enriched_at IS NULL"
+        ).fetchone()[0]
+
+        # Metadata lookups
+        def _meta(key: str) -> str:
+            row = conn.execute(
+                "SELECT value FROM index_meta WHERE key = ?", (key,)
+            ).fetchone()
+            return row[0] if row else "N/A"
+
+        last_build = _meta("last_full_build")
+        phase_boundary = _meta("last_phase_boundary")
+        schema_version = _get_schema_version(conn)
+        migrations = _get_migration_files()
+        max_version = migrations[-1][0] if migrations else 0
+
+        click.echo(f"Nodes:            {node_count}")
+        click.echo(f"Edges:            {edge_count}")
+        click.echo(f"Unenriched:       {unenriched}")
+        click.echo(f"Last build:       {last_build}")
+        click.echo(f"Phase boundary:   {phase_boundary}")
+        click.echo(f"Schema version:   {schema_version}")
+        click.echo(f"DB path:          {db_path}")
+
+        if schema_version > max_version:
+            click.echo(
+                f"[WARNING] Schema version mismatch: DB is v{schema_version} "
+                f"but code supports v{max_version}. "
+                f"Upgrade the tool or run 'index reset --yes'."
+            )
+    finally:
+        conn.close()
 
 
 @cli.command()
-@click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
+@click.option("--yes", "-y", is_flag=True, default=False, help="Skip confirmation prompt.")
 @click.pass_context
 def reset(ctx: click.Context, yes: bool) -> None:
     """Reset the code index by dropping and recreating all tables."""
-    click.echo("[TODO] reset not yet implemented", err=True)
+    db_path = resolve_db_path(ctx.obj.get("db_path"))
+
+    # Check if DB exists
+    if db_path != ":memory:" and not Path(db_path).exists():
+        click.echo("[INFO] Index not initialised. Nothing to reset.", err=True)
+        return
+
+    # Confirmation logic
+    if not yes:
+        if not sys.stdin.isatty():
+            click.echo(
+                "[ERROR] Non-interactive context requires --yes/-y flag to confirm reset.",
+                err=True,
+            )
+            sys.exit(2)
+        # Interactive TTY prompt
+        click.echo(
+            "This will delete all indexed data. Continue? [y/N] ",
+            err=True,
+            nl=False,
+        )
+        answer = input().strip().lower()
+        if answer != "y":
+            click.echo("[INFO] Reset cancelled.", err=True)
+            return
+
+    conn = get_connection(db_path)
+    try:
+        # Drop tables in reverse dependency order
+        for table in ["edges", "nodes_fts", "nodes", "files", "index_meta"]:
+            conn.execute(f"DROP TABLE IF EXISTS {table}")
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Recreate via bootstrap
+    bootstrap(db_path)
+    click.echo("[RESET] Index has been reset successfully.", err=True)
