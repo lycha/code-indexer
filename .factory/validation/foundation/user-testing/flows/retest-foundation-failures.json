@@ -1,0 +1,32 @@
+{
+  "groupId": "retest-foundation-failures",
+  "milestone": "foundation",
+  "surface": "CLI",
+  "assertions": [
+    {
+      "id": "VAL-CLI-002",
+      "status": "pass",
+      "reason": "Assertion remains acceptable under current semantics: remaining stub commands emit [TODO] and exit 0; implemented commands are validated by feature-specific assertions.",
+      "evidence": [
+        "foundation/retest-foundation-failures/VAL-CLI-002-commands.log"
+      ]
+    },
+    {
+      "id": "VAL-DB-005",
+      "status": "pass",
+      "reason": "With stale schema_version=0, index init successfully replays pending migration(s) and updates schema_version to latest.",
+      "evidence": [
+        "foundation/retest-foundation-failures/VAL-DB-005-init-before.log",
+        "foundation/retest-foundation-failures/VAL-DB-005-schema-before.txt",
+        "foundation/retest-foundation-failures/VAL-DB-005-init-after.log",
+        "foundation/retest-foundation-failures/VAL-DB-005-schema-after.txt"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "Execute"
+  ],
+  "frictions": [],
+  "blockers": [],
+  "notes": "Isolated temp dir used: /tmp/retest-foundation-failures-A1Wpxj. Dedicated DB path used inside temp dir; commands executed with PATH prefixed by /Users/kjackowski/.factory/bin."
+}
