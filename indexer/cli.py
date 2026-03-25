@@ -260,8 +260,9 @@ def build(ctx: click.Context, phase: str | None, token_limit: int, exclude: tupl
 @cli.command()
 @click.option("--dry-run", is_flag=True, default=False, help="Show what would be enriched without making API calls.")
 @click.option("--model", type=str, default=None, help="Override the LLM model for enrichment.")
+@click.option("--provider", type=click.Choice(["anthropic", "openai", "openrouter", "litellm"]), default=None, help="LLM provider (auto-detected from env vars if omitted).")
 @click.pass_context
-def enrich(ctx: click.Context, dry_run: bool, model: str | None) -> None:
+def enrich(ctx: click.Context, dry_run: bool, model: str | None, provider: str | None) -> None:
     """Enrich code nodes with LLM-generated semantic metadata."""
     from indexer.enricher import enrich_nodes
 
@@ -270,7 +271,7 @@ def enrich(ctx: click.Context, dry_run: bool, model: str | None) -> None:
     conn = get_connection(db_path)
     try:
         t0 = time.monotonic()
-        exit_code = enrich_nodes(conn, model=model, dry_run=dry_run)
+        exit_code = enrich_nodes(conn, model=model, dry_run=dry_run, provider=provider)
         elapsed = time.monotonic() - t0
         click.echo(f"[PHASE 3] Done in {elapsed:.1f}s", err=True)
     finally:

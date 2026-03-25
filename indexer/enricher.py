@@ -10,10 +10,31 @@ from datetime import datetime, timezone
 
 import anthropic
 import click
+import openai
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "claude-sonnet-4-6"
+PROVIDERS = ("anthropic", "openai", "openrouter", "litellm")
+
+DEFAULT_PROVIDER = "anthropic"
+
+DEFAULT_MODELS = {
+    "anthropic": "claude-sonnet-4-6",
+    "openai": "gpt-4o",
+    "openrouter": "anthropic/claude-sonnet-4-6",
+    "litellm": "gpt-4o",
+}
+
+_PROVIDER_ENV_KEYS = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+    "litellm": "LITELLM_API_KEY",
+}
+
+_PROVIDER_BASE_URLS = {
+    "openrouter": "https://openrouter.ai/api/v1",
+}
 
 ENRICHMENT_PROMPT_TEMPLATE = """\
 You are a code documentation assistant. Given the following code node and its
@@ -131,23 +152,61 @@ def _build_prompt(node_row, context):
     )
 
 
-def call_llm(prompt, model):
-    """Call Claude API with the enrichment prompt. Returns the response text.
-
-    Retries with exponential backoff on RateLimitError/APITimeoutError.
-    """
+def _call_anthropic(prompt, model):
+    """Call Anthropic API. Returns response text."""
     client = anthropic.Anthropic()
+    message = client.messages.create(
+        model=model,
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return message.content[0].text
+
+
+def _call_openai_compat(prompt, model, api_key=None, base_url=None):
+    """Call an OpenAI-compatible API. Works for OpenAI, OpenRouter, and LiteLLM."""
+    kwargs = {}
+    if api_key:
+        kwargs["api_key"] = api_key
+    if base_url:
+        kwargs["base_url"] = base_url
+    client = openai.OpenAI(**kwargs)
+    response = client.chat.completions.create(
+        model=model,
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.choices[0].message.content
+
+
+def _retryable_exceptions(provider):
+    """Return a tuple of retryable exception classes for the given provider."""
+    if provider == "anthropic":
+        return (anthropic.RateLimitError, anthropic.APITimeoutError)
+    return (openai.RateLimitError, openai.APITimeoutError)
+
+
+def call_llm(prompt, model, provider=None):
+    """Call the configured LLM provider with the enrichment prompt. Returns the response text.
+
+    Retries with exponential backoff on rate-limit/timeout errors.
+    """
+    if provider is None:
+        provider = DEFAULT_PROVIDER
 
     max_attempts = 3
     for attempt in range(max_attempts):
         try:
-            message = client.messages.create(
-                model=model,
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            return message.content[0].text
-        except (anthropic.RateLimitError, anthropic.APITimeoutError) as e:
+            if provider == "anthropic":
+                return _call_anthropic(prompt, model)
+            else:
+                env_key = _PROVIDER_ENV_KEYS.get(provider, "OPENAI_API_KEY")
+                api_key = os.environ.get(env_key)
+                base_url = _PROVIDER_BASE_URLS.get(provider)
+                if provider == "litellm":
+                    base_url = os.environ.get("LITELLM_BASE_URL", "http://localhost:4000/v1")
+                return _call_openai_compat(prompt, model, api_key=api_key, base_url=base_url)
+        except _retryable_exceptions(provider) as e:
             if attempt < max_attempts - 1:
                 wait = 2 ** attempt
                 click.echo(f"[WARNING] API error (attempt {attempt + 1}/{max_attempts}): {e}. Retrying in {wait}s...", err=True)
@@ -192,26 +251,48 @@ def _rebuild_fts(conn):
     conn.execute("INSERT INTO nodes_fts(nodes_fts) VALUES('rebuild')")
 
 
-def enrich_nodes(conn, model=None, dry_run=False):
+def _resolve_provider_and_model(provider, model):
+    """Resolve provider and model defaults, auto-detecting provider from env if needed."""
+    if provider is None:
+        if model is not None:
+            provider = DEFAULT_PROVIDER
+        else:
+            for prov, env_key in _PROVIDER_ENV_KEYS.items():
+                if os.environ.get(env_key):
+                    provider = prov
+                    break
+            if provider is None and os.environ.get("LITELLM_BASE_URL"):
+                provider = "litellm"
+            if provider is None:
+                provider = DEFAULT_PROVIDER
+    if model is None:
+        model = DEFAULT_MODELS[provider]
+    return provider, model
+
+
+def enrich_nodes(conn, model=None, dry_run=False, provider=None):
     """Enrich unenriched nodes with LLM-generated metadata.
 
     Returns exit code: 0 if all enriched, 1 if any remain.
     """
-    if model is None:
-        model = DEFAULT_MODEL
+    provider, model = _resolve_provider_and_model(provider, model)
 
     # Check API key (unless dry run)
     if not dry_run:
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            click.echo("[ERROR] ANTHROPIC_API_KEY not set.", err=True)
+        env_key = _PROVIDER_ENV_KEYS.get(provider, "OPENAI_API_KEY")
+        api_key = os.environ.get(env_key)
+        if not api_key and provider != "litellm":
+            click.echo(f"[ERROR] {env_key} not set.", err=True)
+            sys.exit(2)
+        if provider == "litellm" and not api_key and not os.environ.get("LITELLM_BASE_URL"):
+            click.echo("[ERROR] LITELLM_API_KEY or LITELLM_BASE_URL not set.", err=True)
             sys.exit(2)
 
     nodes = _get_unenriched_nodes(conn)
     count = len(nodes)
     estimated_minutes = math.ceil(count / 60) if count > 0 else 0
 
-    click.echo(f"{count} nodes to enrich. Estimated time: ~{estimated_minutes} minutes.", err=True)
+    click.echo(f"{count} nodes to enrich (provider={provider}, model={model}). Estimated time: ~{estimated_minutes} minutes.", err=True)
 
     if dry_run:
         return 0
@@ -228,7 +309,7 @@ def enrich_nodes(conn, model=None, dry_run=False):
         try:
             context = build_node_context(node_id, conn)
             prompt = _build_prompt(node_row, context)
-            response = call_llm(prompt, model)
+            response = call_llm(prompt, model, provider=provider)
             parsed = parse_enrichment_response(response)
 
             if parsed is None:

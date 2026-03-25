@@ -20,8 +20,10 @@ index init
 index build
 
 # 3. Enrich nodes with LLM-generated semantic metadata
+# Set one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, or LITELLM_BASE_URL
 export ANTHROPIC_API_KEY="sk-..."
-index enrich
+index enrich                              # auto-detects provider from env
+index enrich --provider openai            # or specify explicitly
 
 # 4. Query the index
 index query "validateCartState"
@@ -83,14 +85,27 @@ The `Unenriched: 142` line means no nodes have semantic metadata yet — that co
 This step calls the Claude API to generate summaries, domain tags, and inferred responsibilities for each node. It requires an API key:
 
 ```bash
+# Using Anthropic (default)
 export ANTHROPIC_API_KEY="sk-..."
-
-# Preview what will be enriched
-index enrich --dry-run
-
-# Run enrichment
 index enrich
+
+# Using OpenAI
+export OPENAI_API_KEY="sk-..."
+index enrich --provider openai
+
+# Using OpenRouter
+export OPENROUTER_API_KEY="sk-..."
+index enrich --provider openrouter --model anthropic/claude-sonnet-4-6
+
+# Using LiteLLM proxy
+export LITELLM_BASE_URL="http://localhost:4000/v1"
+index enrich --provider litellm
+
+# Preview what will be enriched (any provider)
+index enrich --dry-run
 ```
+
+The provider is auto-detected from environment variables when `--provider` is omitted (checks `ANTHROPIC_API_KEY` → `OPENAI_API_KEY` → `OPENROUTER_API_KEY` → `LITELLM_API_KEY`/`LITELLM_BASE_URL` in order).
 
 Enrichment is hash-gated: re-running `index enrich` after code changes only processes nodes whose content actually changed.
 
@@ -200,14 +215,16 @@ index build --phase PREPARE --exclude "vendor/*"
 Run Phase 3 — LLM enrichment on unenriched nodes. Only re-enriches nodes whose `content_hash` has changed since the last run.
 
 
-| Option          | Description                                          |
-| --------------- | ---------------------------------------------------- |
-| `--db PATH`     | Path to the SQLite database file                     |
-| `--dry-run`     | Show what would be enriched without making API calls |
-| `--model MODEL` | Override the LLM model for enrichment                |
+| Option              | Description                                                         |
+| ------------------- | ------------------------------------------------------------------- |
+| `--db PATH`         | Path to the SQLite database file                                    |
+| `--dry-run`         | Show what would be enriched without making API calls                |
+| `--model MODEL`     | Override the LLM model for enrichment                               |
+| `--provider NAME`   | LLM provider: `anthropic`, `openai`, `openrouter`, or `litellm`    |
 
 ```bash
 index enrich --dry-run
+index enrich --provider openai --model gpt-4o
 ```
 
 ### `index query`
@@ -261,7 +278,7 @@ The indexing pipeline runs in three phases:
 
 1. **AST Parse** — Extracts files, classes, functions, methods, signatures, docstrings, and line ranges using Python's `ast` module (for `.py` files) and `tree-sitter` (for Kotlin and TypeScript). Large nodes are split into chunks within a configurable token limit (cAST split-merge).
 2. **Dependency Map** — For each node, runs `ripgrep` to find all call sites and identifier references across the codebase, then resolves import statements to target nodes. Writes directed edges (`calls`, `imports`, `inherits`, `overrides`, `references`, `instantiates`) into the graph.
-3. **LLM Enrich** — Sends each node's signature, docstring, and immediate graph neighbours to the Claude API. Receives back a `semantic_summary`, `domain_tags`, and `inferred_responsibility`. Only re-runs on nodes whose content hash has changed (hash-gated).
+3. **LLM Enrich** — Sends each node's signature, docstring, and immediate graph neighbours to a configurable LLM provider (Anthropic, OpenAI, OpenRouter, or LiteLLM). Receives back a `semantic_summary`, `domain_tags`, and `inferred_responsibility`. Only re-runs on nodes whose content hash has changed (hash-gated).
 
 The resulting SQLite database (`.codeindex/codeindex.db`) supports three query paths:
 
@@ -285,10 +302,14 @@ All progress and diagnostic output goes to **stderr**; only structured query res
 ## Environment Variables
 
 
-| Variable            | Required    | Description                                                |
-| ------------------- | ----------- | ---------------------------------------------------------- |
-| `ANTHROPIC_API_KEY` | For`enrich` | Anthropic API key for LLM enrichment                       |
-| `CODEINDEX_DB`      | No          | Override default database path (`.codeindex/codeindex.db`) |
+| Variable             | Required                  | Description                                                |
+| -------------------- | ------------------------- | ---------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`  | For `enrich` (Anthropic)  | Anthropic API key for LLM enrichment (default provider)    |
+| `OPENAI_API_KEY`     | For `enrich` (OpenAI)     | OpenAI API key                                             |
+| `OPENROUTER_API_KEY` | For `enrich` (OpenRouter) | OpenRouter API key                                         |
+| `LITELLM_API_KEY`    | For `enrich` (LiteLLM)    | LiteLLM API key (optional if `LITELLM_BASE_URL` is set)   |
+| `LITELLM_BASE_URL`   | For `enrich` (LiteLLM)    | LiteLLM proxy URL (default: `http://localhost:4000/v1`)    |
+| `CODEINDEX_DB`       | No                        | Override default database path (`.codeindex/codeindex.db`) |
 
 Database path resolution order: `--db` flag → `CODEINDEX_DB` env var → `.codeindex/codeindex.db` → exit 2.
 

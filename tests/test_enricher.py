@@ -9,7 +9,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from indexer.enricher import (
-    DEFAULT_MODEL,
+    DEFAULT_MODELS,
+    DEFAULT_PROVIDER,
+    PROVIDERS,
+    _resolve_provider_and_model,
     build_node_context,
     call_llm,
     enrich_nodes,
@@ -378,3 +381,155 @@ class TestEnrichDryRunEstimate:
         captured = capsys.readouterr()
         assert "2 nodes to enrich" in captured.err
         assert "~1 minutes" in captured.err
+
+
+class TestResolveProviderAndModel:
+    def test_defaults_to_anthropic(self):
+        provider, model = _resolve_provider_and_model(None, None)
+        assert provider == "anthropic"
+        assert model == DEFAULT_MODELS["anthropic"]
+
+    def test_explicit_provider(self):
+        provider, model = _resolve_provider_and_model("openai", None)
+        assert provider == "openai"
+        assert model == DEFAULT_MODELS["openai"]
+
+    def test_explicit_model_defaults_provider(self):
+        provider, model = _resolve_provider_and_model(None, "custom-model")
+        assert provider == "anthropic"
+        assert model == "custom-model"
+
+    def test_auto_detect_openai(self):
+        os.environ["OPENAI_API_KEY"] = "test"
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+        try:
+            provider, model = _resolve_provider_and_model(None, None)
+            assert provider == "openai"
+        finally:
+            os.environ.pop("OPENAI_API_KEY", None)
+
+    def test_auto_detect_openrouter(self):
+        os.environ["OPENROUTER_API_KEY"] = "test"
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+        os.environ.pop("OPENAI_API_KEY", None)
+        try:
+            provider, model = _resolve_provider_and_model(None, None)
+            assert provider == "openrouter"
+        finally:
+            os.environ.pop("OPENROUTER_API_KEY", None)
+
+    def test_auto_detect_litellm_base_url(self):
+        os.environ["LITELLM_BASE_URL"] = "http://localhost:4000/v1"
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+        os.environ.pop("OPENAI_API_KEY", None)
+        os.environ.pop("OPENROUTER_API_KEY", None)
+        os.environ.pop("LITELLM_API_KEY", None)
+        try:
+            provider, model = _resolve_provider_and_model(None, None)
+            assert provider == "litellm"
+        finally:
+            os.environ.pop("LITELLM_BASE_URL", None)
+
+    def test_anthropic_takes_priority(self):
+        os.environ["ANTHROPIC_API_KEY"] = "test"
+        os.environ["OPENAI_API_KEY"] = "test"
+        try:
+            provider, model = _resolve_provider_and_model(None, None)
+            assert provider == "anthropic"
+        finally:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+            os.environ.pop("OPENAI_API_KEY", None)
+
+
+class TestCallLlmProviders:
+    @patch("indexer.enricher._call_anthropic")
+    def test_anthropic_provider(self, mock_call):
+        mock_call.return_value = "response"
+        result = call_llm("prompt", "claude-sonnet-4-6", provider="anthropic")
+        assert result == "response"
+        mock_call.assert_called_once_with("prompt", "claude-sonnet-4-6")
+
+    @patch("indexer.enricher._call_openai_compat")
+    def test_openai_provider(self, mock_call):
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            mock_call.return_value = "response"
+            result = call_llm("prompt", "gpt-4o", provider="openai")
+            assert result == "response"
+            mock_call.assert_called_once_with("prompt", "gpt-4o", api_key="test-key", base_url=None)
+        finally:
+            os.environ.pop("OPENAI_API_KEY", None)
+
+    @patch("indexer.enricher._call_openai_compat")
+    def test_openrouter_provider(self, mock_call):
+        os.environ["OPENROUTER_API_KEY"] = "test-key"
+        try:
+            mock_call.return_value = "response"
+            result = call_llm("prompt", "anthropic/claude-sonnet-4-6", provider="openrouter")
+            assert result == "response"
+            mock_call.assert_called_once_with(
+                "prompt", "anthropic/claude-sonnet-4-6",
+                api_key="test-key", base_url="https://openrouter.ai/api/v1",
+            )
+        finally:
+            os.environ.pop("OPENROUTER_API_KEY", None)
+
+    @patch("indexer.enricher._call_openai_compat")
+    def test_litellm_provider(self, mock_call):
+        os.environ["LITELLM_API_KEY"] = "test-key"
+        os.environ["LITELLM_BASE_URL"] = "http://localhost:4000/v1"
+        try:
+            mock_call.return_value = "response"
+            result = call_llm("prompt", "gpt-4o", provider="litellm")
+            assert result == "response"
+            mock_call.assert_called_once_with(
+                "prompt", "gpt-4o",
+                api_key="test-key", base_url="http://localhost:4000/v1",
+            )
+        finally:
+            os.environ.pop("LITELLM_API_KEY", None)
+            os.environ.pop("LITELLM_BASE_URL", None)
+
+
+class TestEnrichWithProvider:
+    @patch("indexer.enricher.call_llm")
+    def test_enrich_with_openai(self, mock_llm, db_conn):
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            _insert_node(db_conn, "test.py::function::foo")
+            mock_llm.return_value = _make_llm_response()
+
+            exit_code = enrich_nodes(db_conn, provider="openai")
+            assert exit_code == 0
+            mock_llm.assert_called_once()
+            _, kwargs = mock_llm.call_args
+            assert kwargs["provider"] == "openai"
+        finally:
+            os.environ.pop("OPENAI_API_KEY", None)
+
+    def test_missing_openai_key_exits_2(self, db_conn):
+        os.environ.pop("OPENAI_API_KEY", None)
+        _insert_node(db_conn, "test.py::function::foo")
+        with pytest.raises(SystemExit) as exc:
+            enrich_nodes(db_conn, provider="openai")
+        assert exc.value.code == 2
+
+    def test_missing_openrouter_key_exits_2(self, db_conn):
+        os.environ.pop("OPENROUTER_API_KEY", None)
+        _insert_node(db_conn, "test.py::function::foo")
+        with pytest.raises(SystemExit) as exc:
+            enrich_nodes(db_conn, provider="openrouter")
+        assert exc.value.code == 2
+
+    def test_litellm_accepts_base_url_only(self, db_conn):
+        """LiteLLM should not exit if only LITELLM_BASE_URL is set (no key)."""
+        os.environ.pop("LITELLM_API_KEY", None)
+        os.environ["LITELLM_BASE_URL"] = "http://localhost:4000/v1"
+        try:
+            _insert_node(db_conn, "test.py::function::foo")
+            # Should not exit 2 -- the actual LLM call will fail but key check passes
+            with patch("indexer.enricher.call_llm", return_value=_make_llm_response()):
+                exit_code = enrich_nodes(db_conn, provider="litellm")
+                assert exit_code == 0
+        finally:
+            os.environ.pop("LITELLM_BASE_URL", None)
