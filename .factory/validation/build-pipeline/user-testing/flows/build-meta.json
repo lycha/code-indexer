@@ -1,0 +1,39 @@
+{
+  "surface": "CLI",
+  "groupId": "build-meta",
+  "assertions": [
+    {
+      "id": "VAL-BUILD-009",
+      "status": "pass",
+      "reason": "index_meta has last_full_build,total_nodes,total_edges after build",
+      "evidence": [
+        "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8/evidence/build-pipeline/build-meta/VAL-BUILD-009_010_build.stderr.txt",
+        "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8/evidence/build-pipeline/build-meta/VAL-BUILD-009_010_index_meta.json"
+      ]
+    },
+    {
+      "id": "VAL-BUILD-010",
+      "status": "pass",
+      "reason": "last_phase_boundary stored as PREPARE",
+      "evidence": [
+        "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8/evidence/build-pipeline/build-meta/VAL-BUILD-009_010_index_meta.json"
+      ]
+    },
+    {
+      "id": "VAL-BUILD-011",
+      "status": "fail",
+      "reason": "did not detect fresh lock; rc=1",
+      "evidence": [
+        "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8/evidence/build-pipeline/build-meta/VAL-BUILD-011.stderr.txt",
+        "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8/evidence/build-pipeline/build-meta/VAL-BUILD-011.exitcode.txt"
+      ]
+    }
+  ],
+  "frictions": [
+    "Subagent execution permission error; assertions validated directly by validator worker in same isolation boundary."
+  ],
+  "blockers": [],
+  "toolsUsed": [
+    "Execute"
+  ]
+}

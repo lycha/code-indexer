@@ -1,0 +1,75 @@
+{
+  "surface": "CLI",
+  "groupId": "build-core",
+  "assertions": [
+    {
+      "id": "VAL-BUILD-001",
+      "status": "pass",
+      "reason": "exit=0, db_exists=True",
+      "evidence": [
+        "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8/evidence/build-pipeline/build-core/VAL-BUILD-001.txt"
+      ]
+    },
+    {
+      "id": "VAL-BUILD-002",
+      "status": "pass",
+      "reason": "exit=0, seen_lock_during=True, removed_after=True",
+      "evidence": [
+        "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8/evidence/build-pipeline/build-core/VAL-BUILD-002.txt"
+      ]
+    },
+    {
+      "id": "VAL-BUILD-003",
+      "status": "pass",
+      "reason": "exit=0, stale_warning=True",
+      "evidence": [
+        "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8/evidence/build-pipeline/build-core/VAL-BUILD-003.txt"
+      ]
+    },
+    {
+      "id": "VAL-BUILD-004",
+      "status": "pass",
+      "reason": "exit=0, phase_order_ok=True",
+      "evidence": [
+        "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8/evidence/build-pipeline/build-core/VAL-BUILD-004.txt"
+      ]
+    },
+    {
+      "id": "VAL-BUILD-005",
+      "status": "pass",
+      "reason": "exit=0",
+      "evidence": [
+        "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8/evidence/build-pipeline/build-core/VAL-BUILD-005.txt"
+      ]
+    },
+    {
+      "id": "VAL-BUILD-006",
+      "status": "pass",
+      "reason": "exit=1, warning_present=True",
+      "evidence": [
+        "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8/evidence/build-pipeline/build-core/VAL-BUILD-006.txt"
+      ]
+    },
+    {
+      "id": "VAL-BUILD-007",
+      "status": "pass",
+      "reason": "exit=2, ripgrep_missing_msg=True",
+      "evidence": [
+        "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8/evidence/build-pipeline/build-core/VAL-BUILD-007.txt"
+      ]
+    },
+    {
+      "id": "VAL-BUILD-008",
+      "status": "pass",
+      "reason": "exit=0, stdout_empty=True",
+      "evidence": [
+        "/Users/kjackowski/.factory/missions/e50d025c-e232-4bff-981f-8e91b46442d8/evidence/build-pipeline/build-core/VAL-BUILD-008.txt"
+      ]
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": [
+    "Execute"
+  ]
+}

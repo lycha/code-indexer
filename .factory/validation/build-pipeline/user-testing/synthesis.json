@@ -1,0 +1,38 @@
+{
+  "milestone": "build-pipeline",
+  "round": 1,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 17,
+    "passed": 16,
+    "failed": 1,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-BUILD-001",
+    "VAL-BUILD-002",
+    "VAL-BUILD-003",
+    "VAL-BUILD-004",
+    "VAL-BUILD-005",
+    "VAL-BUILD-006",
+    "VAL-BUILD-007",
+    "VAL-BUILD-008",
+    "VAL-BUILD-009",
+    "VAL-BUILD-010",
+    "VAL-MAP-001",
+    "VAL-MAP-002",
+    "VAL-MAP-003",
+    "VAL-MAP-004",
+    "VAL-MAP-005",
+    "VAL-MAP-006"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-BUILD-011",
+      "reason": "Fresh lock test triggered TypeError in lock age check (offset-naive vs offset-aware datetime), exiting 1 instead of expected clean concurrent-build error exit 2."
+    }
+  ],
+  "blockedAssertions": [],
+  "appliedUpdates": [],
+  "previousRound": null
+}

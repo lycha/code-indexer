@@ -1,0 +1,71 @@
+{
+  "surface": "CLI",
+  "groupId": "map-edges",
+  "assertions": [
+    {
+      "id": "VAL-MAP-001",
+      "status": "pass",
+      "reason": "All required edge types observed.",
+      "evidence": [
+        "build1.stderr.txt",
+        "map001_edges.json",
+        "map001_edge_types.json"
+      ]
+    },
+    {
+      "id": "VAL-MAP-002",
+      "status": "pass",
+      "reason": "Outbound edge updated and inbound retained.",
+      "evidence": [
+        "map002_before_caller_outbound.json",
+        "build2.stderr.txt",
+        "map002_after_caller_outbound.json",
+        "map002_inbound_to_caller_after.json"
+      ]
+    },
+    {
+      "id": "VAL-MAP-003",
+      "status": "pass",
+      "reason": "No dangling inbound edges remained.",
+      "evidence": [
+        "build3.stderr.txt",
+        "map003_dangling_edges.json"
+      ]
+    },
+    {
+      "id": "VAL-MAP-004",
+      "status": "pass",
+      "reason": "FTS query returned matching node IDs after Phase 2 rebuild.",
+      "evidence": [
+        "build1.stderr.txt",
+        "map004_counts.json",
+        "map004_fts_query.json",
+        "map004_nodes_fts_schema.sql.txt"
+      ]
+    },
+    {
+      "id": "VAL-MAP-005",
+      "status": "pass",
+      "reason": "Without rg on PATH, build exited 2 with ripgrep error.",
+      "evidence": [
+        "map005_build_no_rg.stderr.txt",
+        "map005_build_no_rg.exitcode.txt"
+      ]
+    },
+    {
+      "id": "VAL-MAP-006",
+      "status": "pass",
+      "reason": "Stale caller edge to removed target was not present after rebuild.",
+      "evidence": [
+        "map002_before_caller_outbound.json",
+        "build3.stderr.txt",
+        "map006_old_target_edges_after_change.json"
+      ]
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": [
+    "Execute"
+  ]
+}
