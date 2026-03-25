@@ -1,0 +1,8 @@
+{
+  "featureId": "pipeline-observability-adapters",
+  "status": "pass",
+  "codeQualityIssues": [],
+  "testCoverage": "5 tests: 3 unit tests for NoOpObservabilityAdapter (standard, custom metadata, empty values), 2 integration tests for conditional bean injection (NoOp injected when disabled, Braintrust NOT injected when disabled). BraintrustObservabilityAdapter cannot be tested without real API key but is correctly excluded via @ConditionalOnProperty.",
+  "sharedStateObservations": [],
+  "summary": "Clean conditional injection pattern with @ConditionalOnProperty. NoOp adapter wraps traceAgentCall in try-catch to prevent observability failures from breaking pipeline. matchIfMissing=true ensures safe default behavior."
+}

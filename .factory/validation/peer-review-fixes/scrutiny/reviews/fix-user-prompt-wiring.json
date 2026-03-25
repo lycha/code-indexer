@@ -1,0 +1,20 @@
+{
+  "featureId": "fix-user-prompt-wiring",
+  "milestone": "peer-review-fixes",
+  "reviewer": "scrutiny-validator-inline",
+  "verdict": "pass",
+  "summary": "Prompt field added to TriggerPipelineRequest in api-definition.yml (optional, maxLength 1000). PromptSanitizer.sanitize() now called in PipelineApiImpl.triggerPipeline() with null-safe fallback to empty string. Tests verify prompt sanitization (VAL-FIX-001) and backward compatibility when prompt is omitted.",
+  "fulfillsVerification": {
+    "VAL-FIX-001": {
+      "status": "satisfied",
+      "evidence": "api-definition.yml has 'prompt' field with maxLength 1000. PipelineApiImpl calls PromptSanitizer.sanitize(triggerPipelineRequest.prompt ?: \"\"). Tests 'should pass sanitized prompt to pipeline when prompt contains dangerous content' and 'should default to empty string when prompt is not provided' both pass."
+    }
+  },
+  "codeQuality": {
+    "architecture": "PromptSanitizer is an object (singleton) in adapter/http/incoming/ - appropriate placement for HTTP-layer concern",
+    "testing": "Comprehensive tests for sanitization including markdown fences, role prefixes, truncation, and combined dangerous content. Backward-compat test included.",
+    "naming": "Follows existing naming conventions"
+  },
+  "issues": [],
+  "sharedStateObservations": []
+}

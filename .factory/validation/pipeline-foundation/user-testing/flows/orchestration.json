@@ -1,0 +1,43 @@
+{
+  "groupId": "orchestration",
+  "assertions": {
+    "VAL-ORCH-001": {
+      "status": "pass",
+      "evidence": "PipelineOrchestratorIT: `should execute full pipeline with all 5 steps to COMPLETED` — runs Planner → Search → Researcher → Critic → Composer sequentially with MockLlmAdapter + WireMock, verifies BriefOutput has all sections (tldrBullets, deltaBullets, sources, uncertaintyNotes, coverageWindow), verifies run status is COMPLETED and briefSnapshot saved. PipelineOrchestratorTest: `should execute all 5 steps sequentially to COMPLETED` — verifies exact sequence with mocks.",
+      "details": "PipelineOrchestrator.execute() runs all 5 steps end-to-end, saves BriefOutput as brief_snapshot, and marks run COMPLETED."
+    },
+    "VAL-ORCH-002": {
+      "status": "pass",
+      "evidence": "PipelineOrchestratorIT: `should persist step results after each step` — verifies 5 step results exist with StepStatus.COMPLETED and non-null outputJson for each PipelineStep. PipelineOrchestratorTest: `should execute all 5 steps sequentially to COMPLETED` — verifies 5 IN_PROGRESS upserts and 5 COMPLETED upserts.",
+      "details": "After each step completes, a row is upserted in step results with status=COMPLETED and output_json containing serialized step output."
+    },
+    "VAL-ORCH-003": {
+      "status": "pass",
+      "evidence": "PipelineOrchestratorIT: `should record failed step with error when agent throws` — configures MockLlmAdapter to fail at CRITIC, verifies run FAILED, critic step FAILED with error message, earlier steps still COMPLETED. PipelineOrchestratorTest: `should mark run as FAILED when step throws exception` and `should record failed step with error message` — verifies error propagation.",
+      "details": "When a step throws, step result is saved with status=FAILED and error_message, and pipeline run is updated to status=FAILED."
+    },
+    "VAL-ORCH-004": {
+      "status": "pass",
+      "evidence": "PipelineOrchestratorIT: `should resume from failure and skip completed steps` — fails at CRITIC, then resumes with fixed fixture, verifies pipeline completes. PipelineOrchestratorTest: `should skip completed steps when resuming from a step` — verifies PLANNER/SEARCH/RESEARCHER NOT called, CRITIC/COMPOSER called. `should auto-determine start step from last completed step when no resumeFromStep`.",
+      "details": "When execute() is called with resumeFromStep, steps before that step are loaded from DB (not re-executed). Pipeline continues from specified step."
+    },
+    "VAL-ORCH-005": {
+      "status": "pass",
+      "evidence": "PipelineServiceTest: `should throw PipelineRunAlreadyExistsException when duplicate run exists` — verifies exception when run exists for same subscription+date. `should bypass idempotency when force is true` — verifies new run created with force=true.",
+      "details": "PipelineService.triggerRun() throws PipelineRunAlreadyExistsException for duplicate subscription+date. force=true bypasses check."
+    },
+    "VAL-ORCH-006": {
+      "status": "pass",
+      "evidence": "PipelineOrchestratorTest: `should set MDC context during execution` — captures MDC.get('correlationId'), MDC.get('runId'), MDC.get('subscriptionId') during plannerAgent.plan() call, verifies all non-null and correct, verifies MDC cleared after execution. `should clear MDC context even when execution fails` — verifies MDC cleared in finally block.",
+      "details": "During execution, MDC contains correlationId, runId, and subscriptionId. MDC is cleared in finally block even when execution fails."
+    },
+    "VAL-OBS-003": {
+      "status": "pass",
+      "evidence": "NoOpObservabilityAdapterTest: 3 tests pass — `should do nothing when traceAgentCall is invoked`, `should do nothing when traceAgentCall is invoked with custom metadata`, `should do nothing when traceAgentCall is invoked with empty values`. ObservabilityAdapterIT: `should inject NoOpObservabilityAdapter when braintrust is disabled` and `should not inject BraintrustObservabilityAdapter when braintrust is disabled`.",
+      "details": "When stayposted.braintrust.enabled=false, NoOpObservabilityAdapter is injected and traceAgentCall is a no-op."
+    }
+  },
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["gradle"]
+}

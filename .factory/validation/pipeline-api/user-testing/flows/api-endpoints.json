@@ -1,0 +1,52 @@
+{
+  "groupId": "api-endpoints",
+  "surface": "test-suite",
+  "tool": "gradle",
+  "assertions": {
+    "VAL-API-001": {
+      "status": "pass",
+      "evidence": "PipelineApiImplIT test 'should return 202 when triggering pipeline' PASSED — sends POST /api/v1/pipeline/trigger with subscriptionId, asserts HTTP 202, runId present, status=CREATED, message='Pipeline execution started'",
+      "testClass": "io.stayposted.pipeline.adapter.http.incoming.PipelineApiImplIT",
+      "testMethod": "should return 202 when triggering pipeline"
+    },
+    "VAL-API-002": {
+      "status": "pass",
+      "evidence": "PipelineApiImplIT test 'should return run details when getting pipeline run' PASSED — creates run, adds PLANNER step result, sends GET /api/v1/pipeline/runs/{runId}, asserts HTTP 200, runId, subscriptionId, status, startedAt, steps array with PLANNER step",
+      "testClass": "io.stayposted.pipeline.adapter.http.incoming.PipelineApiImplIT",
+      "testMethod": "should return run details when getting pipeline run"
+    },
+    "VAL-API-003": {
+      "status": "pass",
+      "evidence": "PipelineApiImplIT test 'should return 202 when resuming failed run' PASSED — creates run with FAILED status, sends POST /api/v1/pipeline/runs/{runId}/resume, asserts HTTP 202, runId present, message='Pipeline execution resumed'",
+      "testClass": "io.stayposted.pipeline.adapter.http.incoming.PipelineApiImplIT",
+      "testMethod": "should return 202 when resuming failed run"
+    },
+    "VAL-API-004": {
+      "status": "pass",
+      "evidence": "PipelineApiImplIT test 'should return 409 when triggering duplicate run' PASSED — triggers pipeline twice for same subscriptionId, second trigger asserts HTTP 409 with code=PIPELINE_RUN_ALREADY_EXISTS",
+      "testClass": "io.stayposted.pipeline.adapter.http.incoming.PipelineApiImplIT",
+      "testMethod": "should return 409 when triggering duplicate run"
+    },
+    "VAL-API-005": {
+      "status": "pass",
+      "evidence": "PipelineApiImplIT test 'should return 202 when force triggering existing run' PASSED — triggers pipeline, then triggers again with force=true, asserts HTTP 202 with new runId, status=CREATED",
+      "testClass": "io.stayposted.pipeline.adapter.http.incoming.PipelineApiImplIT",
+      "testMethod": "should return 202 when force triggering existing run"
+    },
+    "VAL-API-006": {
+      "status": "pass",
+      "evidence": "PipelineApiImplIT test 'should return 404 when getting non-existent run' PASSED — sends GET /api/v1/pipeline/runs/{random-uuid}, asserts HTTP 404 with code=PIPELINE_RUN_NOT_FOUND",
+      "testClass": "io.stayposted.pipeline.adapter.http.incoming.PipelineApiImplIT",
+      "testMethod": "should return 404 when getting non-existent run"
+    },
+    "VAL-API-007": {
+      "status": "pass",
+      "evidence": "PipelineApiImplIT test 'should return 409 when resuming non-failed run' PASSED — creates run in CREATED status, sends POST /api/v1/pipeline/runs/{runId}/resume, asserts HTTP 409 with code=PIPELINE_RUN_NOT_RESUMABLE",
+      "testClass": "io.stayposted.pipeline.adapter.http.incoming.PipelineApiImplIT",
+      "testMethod": "should return 409 when resuming non-failed run"
+    }
+  },
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["gradle"]
+}

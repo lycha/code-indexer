@@ -1,0 +1,24 @@
+{
+  "featureId": "fix-orchestrator-step-tracking",
+  "milestone": "peer-review-fixes",
+  "reviewer": "scrutiny-validator-inline",
+  "verdict": "pass",
+  "summary": "updateCurrentStep() added to PipelineRunPort interface, implemented in PipelineRunRepositoryDB and PipelineRunDao. Orchestrator calls updateCurrentStep() at the start of each step execution. inputJson populated via objectMapper.writeValueAsString() for both IN_PROGRESS and COMPLETED/FAILED upserts. InMemoryPipelineRunPort updated. Tests verify both currentStep tracking and inputJson population.",
+  "fulfillsVerification": {
+    "VAL-FIX-003": {
+      "status": "satisfied",
+      "evidence": "PipelineRunPort has updateCurrentStep(). PipelineOrchestrator calls pipelineRunPort.updateCurrentStep(runId, step) before each step's IN_PROGRESS upsert. Tests 'should update currentStep on the pipeline run during execution' and 'should set currentStep to failed step when execution fails' pass in IT. Unit test 'should call updateCurrentStep for each step during execution' verifies all 5 steps."
+    },
+    "VAL-FIX-005": {
+      "status": "satisfied",
+      "evidence": "executeOrLoadStep serializes input via serializeInput() (objectMapper.writeValueAsString). inputJson set in both IN_PROGRESS and COMPLETED/FAILED upserts. Tests 'should populate inputJson for all completed steps' and 'should populate inputJson for failed step' pass in IT. Unit tests also verify inputJson is non-null for all step statuses."
+    }
+  },
+  "codeQuality": {
+    "architecture": "Clean separation - serializeInput() is a private helper that catches serialization errors gracefully (returns null rather than crashing pipeline)",
+    "testing": "Comprehensive coverage: IT tests for DB-level verification, unit tests for orchestrator behavior, both happy path and error path for inputJson",
+    "robustness": "serializeInput wraps in try/catch to prevent pipeline crash from serialization issues - good defensive programming"
+  },
+  "issues": [],
+  "sharedStateObservations": []
+}

@@ -1,0 +1,13 @@
+{
+  "featureId": "fix-bean-name-collision",
+  "status": "pass",
+  "codeQualityIssues": [],
+  "testCoverage": "No new tests needed — 2-line rename fix. Verified all 194 existing tests pass including all @SpringBootTest tests (AuthenticationIT, KmpApplicationTests, AuthApiImplIT, UserApiImplIT) that were previously broken by the BeanDefinitionOverrideException.",
+  "sharedStateObservations": [
+    {
+      "type": "agents_md",
+      "observation": "Workers should be careful with @Bean names when the bean name could collide with @Component class names (Spring auto-generates bean name from class name). Convention: always use a unique descriptive bean name that doesn't match any class name in lowercase."
+    }
+  ],
+  "summary": "Minimal, correct fix. Renamed @Bean('pipelineExecutor') to @Bean('pipelineTaskExecutor') in PipelineAsyncConfig.kt and updated @Async annotation in PipelineExecutor.kt. This resolved the BeanDefinitionOverrideException that broke all 53 @SpringBootTest tests. Verified with full test suite (194 tests, 0 failures when PostgreSQL running)."
+}

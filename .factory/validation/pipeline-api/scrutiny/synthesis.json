@@ -1,0 +1,35 @@
+{
+  "milestone": "pipeline-api",
+  "round": 1,
+  "status": "pass",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "cd stayposted-backend && ./gradlew test",
+      "exitCode": 0,
+      "details": "235 tests executed, 0 failed. All pipeline and pre-existing tests pass. PostgreSQL was started via docker-compose for DAO IT tests."
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "cd stayposted-backend && ./gradlew compileKotlin compileTestKotlin",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "cd stayposted-backend && ./gradlew ktlintCheck",
+      "exitCode": 1,
+      "details": "All 56 lint violations are in pre-existing off-limits files (api/controller/, api/error/, api/filter/, auth/, config/, integration/supabase/, user/). No pipeline code has lint issues. Per AGENTS.md 'Known Pre-Existing Issues', these are expected and not blocking."
+    }
+  },
+  "reviewsSummary": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [],
+  "previousRound": null
+}

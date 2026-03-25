@@ -1,0 +1,22 @@
+{
+  "groupId": "webhook",
+  "surface": "test-suite",
+  "tool": "gradle",
+  "assertions": {
+    "VAL-HOOK-001": {
+      "status": "pass",
+      "evidence": "PipelineWebhookNotifierIT test 'should POST webhook payload to configured URL on completion' PASSED — verifies POST to WireMock /webhook endpoint with correct JSON payload (runId, subscriptionId, status=COMPLETED, completedAt, errorMessage=null) and Content-Type application/json header",
+      "testClass": "io.stayposted.pipeline.adapter.http.outgoing.PipelineWebhookNotifierIT",
+      "testMethod": "should POST webhook payload to configured URL on completion"
+    },
+    "VAL-HOOK-002": {
+      "status": "pass",
+      "evidence": "PipelineWebhookNotifierIT test 'should not throw when webhook endpoint returns 500' PASSED — configures WireMock to return 500, verifies assertDoesNotThrow. PipelineWebhookNotifierTest test 'should not throw when webhook URL is unreachable' PASSED — verifies assertDoesNotThrow when connecting to localhost:19999/nonexistent",
+      "testClass": "io.stayposted.pipeline.adapter.http.outgoing.PipelineWebhookNotifierIT + PipelineWebhookNotifierTest",
+      "testMethod": "should not throw when webhook endpoint returns 500 + should not throw when webhook URL is unreachable"
+    }
+  },
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["gradle"]
+}

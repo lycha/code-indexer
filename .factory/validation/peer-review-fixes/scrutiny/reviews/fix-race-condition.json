@@ -1,0 +1,20 @@
+{
+  "featureId": "fix-race-condition",
+  "milestone": "peer-review-fixes",
+  "reviewer": "scrutiny-validator-inline",
+  "verdict": "pass",
+  "summary": "@Transactional added to PipelineService.triggerRun() for atomic check-and-create. PipelineErrorHandler catches DataIntegrityViolationException and returns 409 CONFLICT with PIPELINE_RUN_ALREADY_EXISTS code. Concurrent request test verifies one gets 202 and the other gets 409 (no 500s).",
+  "fulfillsVerification": {
+    "VAL-FIX-002": {
+      "status": "satisfied",
+      "evidence": "PipelineService.triggerRun() has @Transactional annotation. PipelineErrorHandler has @ExceptionHandler for DataIntegrityViolationException returning 409. Test 'should return one 202 and one 409 when concurrent requests trigger same subscription' passes. Test 'should return 409 when DataIntegrityViolationException is thrown' passes in PipelineErrorHandlerTest."
+    }
+  },
+  "codeQuality": {
+    "architecture": "Defense-in-depth approach: @Transactional for atomicity + DB constraint safety net. Well-designed.",
+    "testing": "Both unit test (PipelineErrorHandlerTest) and integration test (PipelineApiImplIT concurrent test) cover the scenario",
+    "security": "Prevents information leakage - returns clean 409 instead of raw 500 with stack trace"
+  },
+  "issues": [],
+  "sharedStateObservations": []
+}

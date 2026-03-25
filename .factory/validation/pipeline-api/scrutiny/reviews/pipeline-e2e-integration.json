@@ -1,0 +1,12 @@
+{
+  "featureId": "pipeline-e2e-integration",
+  "status": "pass",
+  "issues": [
+    {
+      "severity": "suggestion",
+      "description": "E2E tests use InMemoryPipelineRunPort/InMemoryStepResultPort instead of TestContainers PostgreSQL. While this simplifies test setup and speeds execution, it means the E2E tests don't exercise the actual jOOQ-based persistence layer through the API. The DB-backed persistence is covered separately in PipelineOrchestratorIT."
+    }
+  ],
+  "sharedStateObservations": [],
+  "summary": "Comprehensive end-to-end integration tests that exercise the full pipeline through the API layer. Test 1 (VAL-CROSS-001) verifies the complete trigger-to-completion flow via POST/GET endpoints with briefSnapshot validation. Test 2 (VAL-CROSS-002) verifies the resume flow: trigger → fail at CRITIC → verify FAILED status → resume → verify COMPLETED with all steps passing. Test 3 (VAL-CROSS-003) performs thorough structural validation of the briefSnapshot including tldrBullets count (3-6), non-empty deltaBullets, source fields (title, url, whyItMatters, credibilityLabel, credibilityReason), uncertaintyNotes, and coverageWindow (positive days, dateFrom, dateTo). Uses Awaitility for async polling with 30-second timeout and 500ms intervals. All tests are well-structured and use proper @SpringBootTest configuration with MockLlmAdapter and WireMock."
+}

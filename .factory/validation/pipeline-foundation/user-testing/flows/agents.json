@@ -1,0 +1,33 @@
+{
+  "groupId": "agents",
+  "assertions": {
+    "VAL-AGENT-001": {
+      "status": "pass",
+      "evidence": "PlannerAgentTest: `should produce PlannerOutput when given valid input` — verifies plan() loads planner prompt, builds user prompt from PlannerInput, invokes LlmPort, returns PlannerOutput with planSteps, searchQueries, deltaDefinition. `should return correct fixture data` — verifies MockLlmAdapter returns planner-success fixture. `should include previous brief in prompt when available` and `should work without previous brief` — edge cases.",
+      "details": "PlannerAgent.plan() correctly loads planner.txt prompt, constructs user prompt from PlannerInput, invokes MockLlmAdapter, and returns PlannerOutput with all required fields."
+    },
+    "VAL-AGENT-002": {
+      "status": "pass",
+      "evidence": "ResearcherAgentTest: `should produce ResearcherOutput when given valid input with search results` — verifies research() loads researcher prompt, includes search results in user prompt, invokes LlmPort, returns ResearcherOutput with claims and sources. `should include all search result details in user prompt` — verifies search result content included. `should handle empty search results` — edge case. `should return correct fixture data with claims and sources` — verifies fixture structure.",
+      "details": "ResearcherAgent.research() correctly loads researcher.txt prompt, constructs user prompt including search results, and returns ResearcherOutput with claims and sources."
+    },
+    "VAL-AGENT-003": {
+      "status": "pass",
+      "evidence": "CriticAgentTest: `should produce CriticOutput when given valid input` — verifies validate() loads critic prompt, invokes LlmPort, returns CriticOutput with vettedClaims, uncertaintyNotes, removedClaims. `should return fixture data with vetted claims and removed claims` — verifies fixture structure. `should include claims and sources in user prompt for critic evaluation` — verifies prompt construction. `should handle empty claims from researcher` — edge case.",
+      "details": "CriticAgent.validate() correctly loads critic.txt prompt, invokes MockLlmAdapter, and returns CriticOutput with vettedClaims, uncertaintyNotes, and removedClaims."
+    },
+    "VAL-AGENT-004": {
+      "status": "pass",
+      "evidence": "ComposerAgentTest: `should produce BriefOutput when given valid input` — verifies compose() loads composer prompt, invokes LlmPort, returns BriefOutput with all sections. `should return fixture data with all required sections` — verifies tldrBullets, deltaBullets, sources, uncertaintyNotes, coverageWindow, runMetadata. `should include coverage window and ranked sources in output` — verifies all fields.",
+      "details": "ComposerAgent.compose() correctly loads composer.txt prompt, invokes MockLlmAdapter, and returns BriefOutput with all required sections (tldrBullets, deltaBullets, sources, uncertaintyNotes, coverageWindow, runMetadata)."
+    },
+    "VAL-AGENT-005": {
+      "status": "pass",
+      "evidence": "PromptLoaderTest: `should load planner prompt from classpath`, `should load researcher prompt from classpath`, `should load critic prompt from classpath`, `should load composer prompt from classpath` — all 4 prompts load from src/main/resources/prompts/. `should cache loaded prompts` and `should cache different prompts independently` — caching works. `should throw IllegalArgumentException when prompt file is missing` — missing prompt throws error.",
+      "details": "PromptLoader.load() correctly loads prompts from classpath, caches results, and throws IllegalArgumentException for missing prompts. All 4 prompt files exist."
+    }
+  },
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["gradle"]
+}

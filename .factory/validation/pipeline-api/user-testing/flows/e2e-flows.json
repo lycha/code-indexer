@@ -1,0 +1,28 @@
+{
+  "groupId": "e2e-flows",
+  "surface": "test-suite",
+  "tool": "gradle",
+  "assertions": {
+    "VAL-CROSS-001": {
+      "status": "pass",
+      "evidence": "PipelineEndToEndIT test 'should complete full pipeline trigger-to-completion flow via API (VAL-CROSS-001)' PASSED — sends POST /api/v1/pipeline/trigger, polls GET /api/v1/pipeline/runs/{runId} via Awaitility until status=COMPLETED (within 30s), verifies briefSnapshot has: tldrBullets array (length=4), non-empty deltaBullets, non-empty sources with title/url/whyItMatters/credibilityLabel/credibilityReason, non-empty uncertaintyNotes, coverageWindow with days (numeric)/dateFrom/dateTo, steps array present",
+      "testClass": "io.stayposted.pipeline.PipelineEndToEndIT",
+      "testMethod": "should complete full pipeline trigger-to-completion flow via API (VAL-CROSS-001)"
+    },
+    "VAL-CROSS-002": {
+      "status": "pass",
+      "evidence": "PipelineEndToEndIT test 'should resume failed pipeline and complete via API (VAL-CROSS-002)' PASSED — triggers pipeline with MockLlmAdapter configured to fail on 'critic', polls until FAILED status, verifies PLANNER/SEARCH/RESEARCHER=COMPLETED and CRITIC=FAILED, fixes fixture to critic-success, sends POST resume, polls until COMPLETED, verifies all 5 steps COMPLETED and briefSnapshot present with non-empty tldrBullets",
+      "testClass": "io.stayposted.pipeline.PipelineEndToEndIT",
+      "testMethod": "should resume failed pipeline and complete via API (VAL-CROSS-002)"
+    },
+    "VAL-CROSS-003": {
+      "status": "pass",
+      "evidence": "PipelineEndToEndIT test 'should have valid briefSnapshot structure with all required sections (VAL-CROSS-003)' PASSED — triggers pipeline, polls until COMPLETED, verifies: tldrBullets is non-empty array with 3-6 items, deltaBullets is non-empty array, sources is non-empty array with first source having non-empty string title/url/whyItMatters/credibilityLabel/credibilityReason, uncertaintyNotes is non-empty string, coverageWindow has days > 0 and dateFrom/dateTo present",
+      "testClass": "io.stayposted.pipeline.PipelineEndToEndIT",
+      "testMethod": "should have valid briefSnapshot structure with all required sections (VAL-CROSS-003)"
+    }
+  },
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["gradle"]
+}

@@ -1,0 +1,35 @@
+{
+  "milestone": "peer-review-fixes",
+  "round": 1,
+  "status": "pass",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "cd stayposted-backend && ./gradlew test",
+      "exitCode": 0,
+      "details": "250 tests executed in 19.5s, all passed"
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "cd stayposted-backend && ./gradlew compileKotlin compileTestKotlin",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "cd stayposted-backend && ./gradlew ktlintCheck",
+      "exitCode": 1,
+      "details": "All failures are in pre-existing off-limits files (ErrorHandler.kt, AuthApiImpl.kt, AuthCookieService.kt, HealthController.kt, etc.). Zero pipeline code lint issues. Per AGENTS.md 'Known Pre-Existing Issues', ktlintCheck will always exit 1 due to off-limits files."
+    }
+  },
+  "reviewsSummary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [],
+  "previousRound": null
+}

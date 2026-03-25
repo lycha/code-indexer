@@ -1,0 +1,12 @@
+{
+  "featureId": "pipeline-openapi-contract",
+  "status": "pass",
+  "issues": [
+    {
+      "severity": "suggestion",
+      "description": "The RodoSessionSummary schema uses 'attended' (boolean) but the 'status' field is listed as required without being defined in properties. Minor schema inconsistency in existing code, not introduced by this feature."
+    }
+  ],
+  "sharedStateObservations": [],
+  "summary": "OpenAPI contract properly defines all 3 pipeline endpoints (trigger, get run, resume) with correct HTTP methods, operationIds, tags, and request/response schemas. All schemas (TriggerPipelineRequest, ResumePipelineRequest, TriggerPipelineResponse, PipelineRunResponse, StepResultResponse, BriefOutputResponse, BriefSourceResponse, CoverageWindowResponse) are well-structured with appropriate required fields, enums, and type constraints. Uses the existing ErrorResponse for error cases. Code generation produces a valid PipelineApi interface and project compiles successfully."
+}

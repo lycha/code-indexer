@@ -1,0 +1,16 @@
+{
+  "featureId": "pipeline-webhook-metrics",
+  "status": "pass",
+  "issues": [
+    {
+      "severity": "suggestion",
+      "description": "PipelineWebhookNotifier logs the webhookUrl in error messages (logger.error). While this is a configured URL and not a secret, in production it could be useful to redact parts of internal URLs from logs."
+    },
+    {
+      "severity": "suggestion",
+      "description": "WebhookRestTemplateConfig creates a dedicated RestTemplate bean with hardcoded timeout values (5s connect, 10s read). These timeouts could be made configurable via PipelineProperties, though the current values are reasonable defaults."
+    }
+  ],
+  "sharedStateObservations": [],
+  "summary": "PipelineWebhookNotifier correctly implements webhook notification with graceful failure handling - errors are caught and logged but never propagate to fail the pipeline. The notifier properly handles null/empty/blank webhook URLs by no-oping. PipelineMetricsService provides comprehensive Micrometer metrics: step duration timer (tagged by step), run completed/failed counters, and token usage counters (tagged by agent). MetricsRecordingLlmPort is a clean decorator pattern for recording token metrics. Tests include both unit tests (null/empty URL, unreachable endpoint) and integration tests (WireMock webhook verification, 500 error handling). Metrics integration test verifies all 5 step durations, run completion counter, and per-agent token usage."
+}

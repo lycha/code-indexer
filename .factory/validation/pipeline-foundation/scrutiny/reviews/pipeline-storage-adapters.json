@@ -1,0 +1,19 @@
+{
+  "featureId": "pipeline-storage-adapters",
+  "status": "pass",
+  "codeQualityIssues": [
+    {
+      "severity": "non_blocking",
+      "description": "PipelineRunDao and StepResultDao IT tests connect to localhost:5432 instead of using TestContainers. This is documented as due to Colima/TestContainers 1.18.3 incompatibility and matches the existing project pattern (UserDaoIT etc.). These 16 tests fail when PostgreSQL is not running but this is the known pre-existing pattern.",
+      "file": "src/test/kotlin/io/stayposted/pipeline/adapter/storage/PipelineRunDaoIT.kt"
+    }
+  ],
+  "testCoverage": "16 DAO integration tests: 9 PipelineRunDaoIT (insert/retrieve, findBySubscriptionAndDate, null when not found, duplicate constraint, updateStatus x3, saveBriefSnapshot JSONB), 7 StepResultDaoIT (insert/retrieve, upsert on conflict, null when not found, findAllByRun, findLastCompletedStep, null when no completed, JSONB output). PipelineConfigIT also fixed to use slim context.",
+  "sharedStateObservations": [
+    {
+      "type": "library",
+      "observation": "TestContainers 1.18.3 is incompatible with Colima Docker runtime. Ryuk sidecar fails to mount Docker socket. DAO IT tests use docker-compose PostgreSQL instead. Consider upgrading to TestContainers 1.19+ or switching to Docker Desktop."
+    }
+  ],
+  "summary": "Correct jOOQ-based storage implementation following UserDao/UserRepositoryDB patterns. JSONB serialization, ON CONFLICT upsert, date-based queries all work. PipelineConfigIT fixed to not require full app context. DAO IT tests match existing project pattern but are not self-contained."
+}

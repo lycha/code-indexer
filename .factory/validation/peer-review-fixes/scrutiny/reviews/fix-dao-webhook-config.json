@@ -1,0 +1,16 @@
+{
+  "featureId": "fix-dao-webhook-config",
+  "milestone": "peer-review-fixes",
+  "reviewer": "scrutiny-validator-inline",
+  "verdict": "pass",
+  "summary": "Three isolated fixes implemented correctly. (1) Timezone-safe query: findBySubscriptionAndDate uses DSL.field(\"DATE({0} AT TIME ZONE 'UTC')\") for UTC-explicit date comparison. (2) Webhook URL masking: webhookUrl.substringBefore(\"?\") used in both info and error log statements. (3) Configurable timeouts: PipelineProperties.WebhookConfig with connectTimeoutMs/readTimeoutMs defaults, WebhookRestTemplateConfig reads from pipelineProperties.webhook.",
+  "fulfillsVerification": {},
+  "codeQuality": {
+    "timezone_fix": "Uses AT TIME ZONE 'UTC' PostgreSQL syntax via jOOQ DSL.field - correctly handles timezone-independent date comparison",
+    "security": "webhookUrl.substringBefore(\"?\") prevents query parameter secrets from leaking into logs. Test 'should send webhook to URL with query params and mask URL in logs' validates this.",
+    "configuration": "WebhookConfig nested in PipelineProperties follows existing AsyncConfig pattern. @ConstructorBinding with defaults.",
+    "testing": "WebhookRestTemplateConfigTest verifies configurable timeouts. PipelineWebhookNotifierIT tests URL masking behavior."
+  },
+  "issues": [],
+  "sharedStateObservations": []
+}

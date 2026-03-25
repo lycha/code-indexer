@@ -1,0 +1,14 @@
+{
+  "featureId": "pipeline-orchestrator",
+  "status": "pass",
+  "codeQualityIssues": [
+    {
+      "severity": "suggestion",
+      "description": "PipelineOrchestrator.execute() logs the runId in error message via string interpolation: 'Pipeline execution failed for run ${run.id}'. While not a security issue here (UUID), using structured logging with MDC (already set) would be more consistent.",
+      "file": "src/main/kotlin/io/stayposted/pipeline/domain/PipelineOrchestrator.kt"
+    }
+  ],
+  "testCoverage": "22 tests: 8 PipelineOrchestratorTest (full execution, MDC set, MDC cleared on failure, failed step recording, resume skip, step ID reuse, auto-determine start step), 5 PipelineOrchestratorIT (end-to-end with MockLlmAdapter + WireMock, step persistence, failure recording, resume from failure, MDC), 9 PipelineServiceTest (trigger + async, idempotency duplicate, force bypass, resume FAILED, resume from step, not found, not resumable COMPLETED, not resumable RUNNING, PARTIALLY_FAILED resumable). All 6 VAL-ORCH assertions covered.",
+  "sharedStateObservations": [],
+  "summary": "Well-structured orchestrator with clean step-level persistence and resume-from-failure support. executeOrLoadStep uses reified generics for type-safe deserialization. PipelineService correctly handles idempotency and resume validation. @Async dispatch properly configured after bean name collision fix. MDC context management in try/finally block."
+}

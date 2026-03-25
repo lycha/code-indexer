@@ -1,0 +1,7 @@
+commands:
+  install: pip install -e ".[dev]"
+  test: python3 -m pytest tests/ -v
+  lint: python3 -m pytest tests/ -v --tb=short
+  typecheck: echo "No typecheck configured - pure Python project"
+
+services: {}

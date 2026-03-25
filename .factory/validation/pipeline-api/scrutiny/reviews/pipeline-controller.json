@@ -1,0 +1,16 @@
+{
+  "featureId": "pipeline-controller",
+  "status": "pass",
+  "issues": [
+    {
+      "severity": "suggestion",
+      "description": "PipelineApiImpl.triggerPipeline() passes an empty string for userPrompt. The TriggerPipelineRequest schema doesn't include a userPrompt field, so the prompt is never provided via the API. This is acceptable for the current milestone but should be addressed when user prompts are exposed via the API."
+    },
+    {
+      "severity": "suggestion",
+      "description": "PromptSanitizer is defined but not currently used in PipelineApiImpl (since userPrompt is hardcoded to empty string). It should be integrated when the API accepts user prompts."
+    }
+  ],
+  "sharedStateObservations": [],
+  "summary": "PipelineApiImpl correctly implements the generated PipelineApi interface with @Timed and @RestController annotations. All 3 endpoints (trigger, get run, resume) are properly implemented with correct HTTP status codes (202, 200, 404, 409). PipelineErrorHandler properly maps domain exceptions to HTTP responses with appropriate error codes. PromptSanitizer is well-implemented with regex-based sanitization. API integration tests cover all 7 required scenarios (trigger 202, get run 200, resume 202, duplicate 409, force 202, not found 404, non-failed resume 409). Tests use in-memory ports and MockK for clean isolation."
+}

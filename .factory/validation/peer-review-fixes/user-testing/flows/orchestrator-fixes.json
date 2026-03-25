@@ -1,0 +1,38 @@
+{
+  "groupId": "orchestrator-fixes",
+  "milestone": "peer-review-fixes",
+  "assertions": {
+    "VAL-FIX-003": {
+      "status": "pass",
+      "evidence": "PipelineOrchestratorIT verifies currentStep is updated during execution (set to COMPOSER after completion, set to CRITIC on failure). PipelineOrchestratorTest verifies updateCurrentStep called for each of 5 steps. PipelineEndToEndIT E2E test verifies $.currentStep=COMPOSER in GET response after completion. All tests PASSED.",
+      "tests": [
+        "should update currentStep on the pipeline run during execution",
+        "should set currentStep to failed step when execution fails",
+        "should call updateCurrentStep for each step during execution",
+        "PipelineEndToEndIT: currentStep verified as COMPOSER in GET response"
+      ]
+    },
+    "VAL-FIX-004": {
+      "status": "pass",
+      "evidence": "Static analysis confirms: (1) PipelineExecutor.kt has zero adapter imports — only imports from domain/model/, domain/port/, org.slf4j, org.springframework, java.time. (2) NotificationPort interface exists in domain/port/NotificationPort.kt with notifyRunCompleted method. (3) PipelineWebhookNotifier in adapter/http/outgoing/ implements NotificationPort. (4) PipelineExecutor constructor injects NotificationPort, not PipelineWebhookNotifier.",
+      "tests": [
+        "grep verification: zero adapter imports in PipelineExecutor.kt",
+        "NotificationPort interface verified in domain/port/",
+        "PipelineWebhookNotifier implements NotificationPort verified"
+      ]
+    },
+    "VAL-FIX-005": {
+      "status": "pass",
+      "evidence": "PipelineOrchestratorIT verifies inputJson is non-null for all completed steps (all 5 steps) and for failed steps. PipelineOrchestratorTest verifies inputJson is non-null in both IN_PROGRESS and COMPLETED upserts, and when step fails. All 4 inputJson tests PASSED.",
+      "tests": [
+        "should populate inputJson for all completed steps",
+        "should populate inputJson for failed step",
+        "should populate inputJson for all step results",
+        "should populate inputJson even when step fails"
+      ]
+    }
+  },
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["gradle", "grep"]
+}

@@ -1,0 +1,14 @@
+{
+  "featureId": "pipeline-llm-adapter",
+  "status": "pass",
+  "codeQualityIssues": [
+    {
+      "severity": "suggestion",
+      "description": "extractJson() regex pattern uses non-greedy matching (\\{[\\s\\S]*?}) which may not handle deeply nested JSON with multiple closing braces correctly in some edge cases. The brace fallback (first-{ to last-}) handles this, but the fenced block extraction could miss the full JSON if it ends with }}) for example.",
+      "file": "src/main/kotlin/io/stayposted/pipeline/adapter/llm/BedrockConverseAdapter.kt"
+    }
+  ],
+  "testCoverage": "18 tests total: 6 extractJson variants (raw JSON, ```json fence, ``` fence, preamble brace matching, raw fallback, nested JSON), 4 invoke tests (full flow, observability, markdown handling, model resolution), 2 retry tests (success after failures, exhaustion), 6 MockLlmAdapter tests (4 agent fixtures, override, missing file). Comprehensive coverage.",
+  "sharedStateObservations": [],
+  "summary": "Well-implemented LLM adapter following the specified design. extractJson handles all 4 required input formats. Retry logic uses Spring RetryTemplate correctly with exponential backoff. MockLlmAdapter provides good test infrastructure. ObservabilityPort integration is clean."
+}

@@ -1,0 +1,38 @@
+{
+  "groupId": "infra",
+  "assertions": {
+    "VAL-INFRA-001": {
+      "status": "pass",
+      "evidence": "PipelineOrchestratorIT uses @SpringBootTest with in-memory ports and WireMock. Flyway V3 migration is validated implicitly in IT tests using TestContainers. PipelineConfigIT confirms Spring context loads with pipeline config properties.",
+      "details": "V3 migration creates pipeline_run and pipeline_step_result tables. Tested via integration tests with TestContainers PostgreSQL."
+    },
+    "VAL-INFRA-002": {
+      "status": "pass",
+      "evidence": "PipelineConfigIT: 5 tests pass — `should bind BedrockProperties from yaml`, `should bind TavilyProperties from yaml`, `should bind BraintrustProperties from yaml`, `should bind PipelineProperties from yaml`, `should resolve model by agent name`. All @ConstructorBinding properties verified.",
+      "details": "All 4 ConfigurationProperties classes (BedrockProperties, TavilyProperties, BraintrustProperties, PipelineProperties) bind correctly from YAML in integration test."
+    },
+    "VAL-INFRA-003": {
+      "status": "pass",
+      "evidence": "BedrockConverseAdapterTest: `should invoke Bedrock and return parsed response` — verifies ConverseRequest build with system prompt, user prompt, model resolution. `should call observabilityPort traceAgentCall after successful invoke` — verifies observability recording. `should resolve correct model ID for each agent` — verifies model resolution per agent.",
+      "details": "BedrockConverseAdapter correctly builds ConverseRequest, calls bedrockClient.converse() via mock, extracts text, parses JSON, and records observability."
+    },
+    "VAL-INFRA-004": {
+      "status": "pass",
+      "evidence": "BedrockConverseAdapterTest ExtractJsonTests: 6 tests pass — `should extract raw JSON when input is already valid JSON`, `should extract JSON from json fenced block`, `should extract JSON from fenced block without language tag`, `should extract JSON from preamble text using brace matching`, `should return raw text as fallback when no JSON found`, `should extract nested JSON from fenced block`.",
+      "details": "extractJson() handles: (a) raw JSON, (b) ```json fenced blocks, (c) ``` without language tag, (d) preamble text with brace matching, (e) nested JSON, (f) fallback."
+    },
+    "VAL-INFRA-005": {
+      "status": "pass",
+      "evidence": "TavilySearchAdapterIT: 5 tests pass — `should return mapped search results when Tavily API returns success`, `should handle empty results gracefully`, `should throw exception when Tavily API returns error`, `should execute multiple queries and merge results`, `should deduplicate results by URL case-insensitively`. Uses @AutoConfigureWireMock.",
+      "details": "TavilySearchAdapter sends POST requests with correct auth, maps responses to SearchResult, deduplicates by URL (case-insensitive), handles errors."
+    },
+    "VAL-INFRA-006": {
+      "status": "pass",
+      "evidence": "BedrockConverseAdapterTest RetryTests: `should retry on BedrockRuntimeException and succeed` — fails 2 times then succeeds, verifies 3 total calls. `should throw after exhausting all retries` — verifies exactly 3 attempts then propagation.",
+      "details": "RetryTemplate retries on BedrockRuntimeException up to 3 times with exponential backoff. After exhausting retries, exception propagates."
+    }
+  },
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["gradle"]
+}

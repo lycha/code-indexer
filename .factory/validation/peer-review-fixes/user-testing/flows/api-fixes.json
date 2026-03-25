@@ -1,0 +1,25 @@
+{
+  "groupId": "api-fixes",
+  "milestone": "peer-review-fixes",
+  "assertions": {
+    "VAL-FIX-001": {
+      "status": "pass",
+      "evidence": "PipelineApiImplIT tests verify: (1) trigger with prompt containing markdown fences and role prefixes passes sanitized prompt to pipeline, (2) trigger without prompt field defaults to empty string. Both tests PASSED.",
+      "tests": [
+        "should pass sanitized prompt to pipeline when prompt contains dangerous content (VAL-FIX-001)",
+        "should default to empty string when prompt is not provided (VAL-FIX-001)"
+      ]
+    },
+    "VAL-FIX-002": {
+      "status": "pass",
+      "evidence": "PipelineApiImplIT concurrent test verifies two simultaneous triggers for same subscription: one gets 202, other gets 409 with PIPELINE_RUN_ALREADY_EXISTS, neither returns 500. PipelineErrorHandlerTest verifies DataIntegrityViolationException maps to 409. All tests PASSED.",
+      "tests": [
+        "should return one 202 and one 409 when concurrent requests trigger same subscription (VAL-FIX-002)",
+        "should return 409 when DataIntegrityViolationException is thrown (VAL-FIX-002)"
+      ]
+    }
+  },
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["gradle"]
+}

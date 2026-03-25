@@ -1,0 +1,42 @@
+{
+  "featureId": "fix-pipeline-authorization",
+  "status": "pass",
+  "issues": [
+    {
+      "severity": "non_blocking",
+      "description": "resumePipeline fetches the run twice: once in PipelineApiImpl for the authorization check, and once inside PipelineService.resumeRun(). Consider passing the already-fetched run to the service or extracting the auth check into a shared utility to avoid the redundant DB query.",
+      "file": "stayposted-backend/src/main/kotlin/io/stayposted/pipeline/adapter/http/incoming/PipelineApiImpl.kt",
+      "line": "84-90"
+    },
+    {
+      "severity": "non_blocking",
+      "description": "SubscriptionAuthorizationException message includes the subscriptionId ('User is not authorized to access subscription <UUID>'). For getPipelineRun and resumePipeline, the caller only provides a runId, so the 403 response body leaks the internal subscription UUID (users.id) to an unauthorized user. Consider using a generic message without the subscription ID, or at least omit it in the HTTP response (the PipelineErrorHandler currently passes ex.message directly).",
+      "file": "stayposted-backend/src/main/kotlin/io/stayposted/pipeline/domain/SubscriptionAuthorizationException.kt",
+      "line": "7-8"
+    },
+    {
+      "severity": "suggestion",
+      "description": "The verifySubscriptionOwnership private method lives in the controller (PipelineApiImpl). If other controllers or services need the same check in the future, consider extracting it into a reusable authorization service. For now this is fine given the single-controller scope.",
+      "file": "stayposted-backend/src/main/kotlin/io/stayposted/pipeline/adapter/http/incoming/PipelineApiImpl.kt",
+      "line": "109-115"
+    }
+  ],
+  "sharedStateObservations": [
+    {
+      "target": "AGENTS.md",
+      "description": "AGENTS.md lists pipeline domain port interfaces as off-limits but the new SubscriptionOwnershipPort was correctly added as a NEW port (not a modification). Consider updating AGENTS.md to either add SubscriptionOwnershipPort to the off-limits list or clarify the rule applies only to modifying existing ports, not creating new ones.",
+      "evidence": "AGENTS.md says 'Domain port interfaces: LlmPort.kt, SearchPort.kt, ObservabilityPort.kt, StepResultPort.kt, PipelineRunPort.kt, NotificationPort.kt — do NOT modify'. New file SubscriptionOwnershipPort.kt was created at stayposted-backend/src/main/kotlin/io/stayposted/pipeline/domain/port/SubscriptionOwnershipPort.kt"
+    },
+    {
+      "target": "AGENTS.md",
+      "description": "AGENTS.md review-fixes context notes that 'subscriptionId == users.id' is the ownership model (the SubscriptionOwnershipAdapter queries users.id = subscriptionId). This domain mapping is non-obvious and could be documented in AGENTS.md or library for future workers, since the feature description had to tell the worker to 'investigate the codebase' to discover it.",
+      "evidence": "SubscriptionOwnershipAdapter.kt queries Tables.USERS.ID.eq(subscriptionId) and Tables.USERS.SUPABASE_USER_ID.eq(userId.toString()). The feature description said 'IMPORTANT: Before implementing, investigate the codebase to understand how subscriptions relate to users.'"
+    },
+    {
+      "target": "skills",
+      "description": "Worker followed the pipeline-worker skill procedure (read context, implement, verify). The skill suggests 'Write Tests First (Red)' but the worker implemented code and tests together. This is acceptable for authorization cross-cutting concerns but the deviation wasn't flagged.",
+      "evidence": "Handoff skillFeedback.followedProcedure=true, but the commit includes both production code and tests in a single commit (no red phase evidence). This is pragmatic for a review-fix but differs from the skill's TDD mandate."
+    }
+  ],
+  "summary": "The implementation correctly adds subscription-level authorization to all three pipeline API endpoints (triggerPipeline, getPipelineRun, resumePipeline). The architectural approach is clean: a SubscriptionOwnershipPort domain interface with a jOOQ adapter, a dedicated exception type with a 403 error handler, and consistent use of AuthenticationContext.get() in each endpoint. All three VAL-AUTH validation items are covered by explicit integration tests. The authorization cannot be bypassed — it runs after authentication and before any business logic. Two non-blocking issues found: a double DB fetch for resumePipeline and a minor information leak of subscription UUID in error responses. Overall, this is a solid implementation that addresses the review finding M2 completely."
+}

@@ -1,0 +1,32 @@
+{
+  "featureId": "fix-code-quality-issues",
+  "status": "pass",
+  "issues": [
+    {
+      "severity": "non_blocking",
+      "description": "CompletableFuture.supplyAsync uses ForkJoinPool.commonPool() with no explicit executor. While this is correct per AGENTS.md guidance and fine for a small number of queries, it means pipeline search tasks share the common pool with other application work. If query count grows, consider injecting a dedicated executor. Not a problem at current scale.",
+      "file": "stayposted-backend/src/main/kotlin/io/stayposted/pipeline/adapter/search/TavilySearchAdapter.kt",
+      "line": "33-36"
+    },
+    {
+      "severity": "non_blocking",
+      "description": "future.get() has no explicit timeout. If a Tavily HTTP call hangs beyond the RestTemplate read timeout, the thread will block indefinitely. In practice the RestTemplate's SimpleClientHttpRequestFactory timeouts should prevent this, but an explicit timeout on get() would add defense-in-depth.",
+      "file": "stayposted-backend/src/main/kotlin/io/stayposted/pipeline/adapter/search/TavilySearchAdapter.kt",
+      "line": "40"
+    },
+    {
+      "severity": "suggestion",
+      "description": "The fallback URI 'https://invalid-url' is a non-resolvable placeholder. Consider using a more descriptive sentinel value (e.g., 'https://malformed-source-url.invalid') using the .invalid TLD reserved by RFC 2606, which makes intent clearer and is guaranteed to never resolve.",
+      "file": "stayposted-backend/src/main/kotlin/io/stayposted/pipeline/adapter/http/incoming/PipelineApiImpl.kt",
+      "line": "152"
+    }
+  ],
+  "sharedStateObservations": [
+    {
+      "target": "skills",
+      "description": "The pipeline-worker skill should document that when parallelizing HTTP calls with CompletableFuture.supplyAsync, the caller must unwrap ExecutionException (throw ex.cause ?: ex) to preserve original exception types. Without this, existing tests that assert on specific exception types (e.g., HttpServerErrorException) will fail because they get wrapped in ExecutionException.",
+      "evidence": "Worker transcript shows initial test failure in TavilySearchAdapterIT 'should throw exception when Tavily API returns error' due to ExecutionException wrapping. Worker spent multiple tool calls diagnosing and fixing this. skillFeedback.suggestedChanges confirms: 'The pipeline-worker skill could mention that parallelizing HTTP calls with CompletableFuture requires ExecutionException unwrapping to preserve original exception types for existing tests.'"
+    }
+  ],
+  "summary": "All 4 code quality fixes are correctly implemented. (m2) PipelineErrorHandler now uses SLF4J LoggerFactory with no remaining log4j imports. (m3) URI.create in mapBriefSource is wrapped in try-catch for IllegalArgumentException with a safe fallback URI and warning log. (m4) TavilySearchAdapter executes queries in parallel via CompletableFuture.supplyAsync with proper ExecutionException unwrapping to preserve original exception types. (m5) PipelineStep.nextStep() uses entries instead of values(). All 272 tests pass. The implementation is clean, minimal, and follows project conventions. Three non-blocking/suggestion items noted for future consideration but nothing requiring rework."
+}

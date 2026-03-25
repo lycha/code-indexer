@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "code-indexer"
+version = "0.1.0"
+description = "Hybrid code indexing system with AST parsing, dependency mapping, and LLM enrichment"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[project.scripts]
+index = "indexer.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["indexer*"]

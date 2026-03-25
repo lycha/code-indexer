@@ -1,0 +1,22 @@
+{
+  "groupId": "observability",
+  "surface": "test-suite",
+  "tool": "gradle",
+  "assertions": {
+    "VAL-OBS-001": {
+      "status": "pass",
+      "evidence": "PipelineMetricsIT test 'should record step duration for all steps after successful pipeline run' PASSED — runs full pipeline with MockLlmAdapter + WireMock, queries SimpleMeterRegistry for pipeline.step.duration timer tagged by each step (PLANNER, SEARCH, RESEARCHER, CRITIC, COMPOSER), verifies each timer has count=1 and non-negative duration",
+      "testClass": "io.stayposted.pipeline.domain.PipelineMetricsIT",
+      "testMethod": "should record step duration for all steps after successful pipeline run"
+    },
+    "VAL-OBS-002": {
+      "status": "pass",
+      "evidence": "PipelineMetricsIT test 'should record token usage for LLM agents after pipeline run' PASSED — runs full pipeline with MetricsRecordingLlmPort wrapping MockLlmAdapter, queries SimpleMeterRegistry for pipeline.tokens.input and pipeline.tokens.output counters tagged by agent (planner, researcher, critic, composer), verifies each counter has count > 0",
+      "testClass": "io.stayposted.pipeline.domain.PipelineMetricsIT",
+      "testMethod": "should record token usage for LLM agents after pipeline run"
+    }
+  },
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["gradle"]
+}
