@@ -1,7 +1,7 @@
 {
   "milestone": "commands",
-  "round": 1,
-  "status": "fail",
+  "round": 2,
+  "status": "pass",
   "validatorsRun": {
     "test": {
       "passed": true,
@@ -20,45 +20,19 @@
     }
   },
   "reviewsSummary": {
-    "total": 4,
-    "passed": 3,
-    "failed": 1,
-    "failedFeatures": [
-      "cross-area-integration"
-    ]
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "failedFeatures": []
   },
-  "blockingIssues": [
-    {
-      "featureId": "cross-area-integration",
-      "severity": "blocking",
-      "description": "Hash-gating test only checks `unenriched_after > 0`, which does not validate that only changed nodes are marked for re-enrichment."
-    },
-    {
-      "featureId": "cross-area-integration",
-      "severity": "blocking",
-      "description": "DB path consistency test omits `index enrich`, leaving required command coverage incomplete."
-    },
-    {
-      "featureId": "cross-area-integration",
-      "severity": "blocking",
-      "description": "Cross-language edge test asserts only `edges > 0`, which does not prove edges exist across language boundaries."
-    }
-  ],
+  "blockingIssues": [],
   "appliedUpdates": [],
-  "suggestedGuidanceUpdates": [
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [
     {
-      "target": "skills",
-      "suggestion": "Update python-cli-worker procedure to require explicit manual CLI verification commands (or explicitly allow validated test-only completion) before marking `followedProcedure: true`.",
-      "evidence": "cross-area-integration review observed mismatch between required manual verification step and transcript evidence.",
-      "isSystemic": false
-    },
-    {
-      "target": "AGENTS.md",
-      "suggestion": "Add portability guidance forbidding machine-specific absolute paths in tests (e.g., use env setup/helpers instead).",
-      "evidence": "cross-area-integration review found hardcoded `/Users/kjackowski/.factory/bin` PATH in tests/test_integration.py.",
-      "isSystemic": false
+      "observation": "A machine-specific PATH entry remains in integration test command helper, indicating portability conventions are still not consistently enforced in test utilities.",
+      "reason": "already-documented"
     }
   ],
-  "rejectedObservations": [],
-  "previousRound": null
+  "previousRound": ".factory/validation/commands/scrutiny/synthesis.json@round1"
 }

@@ -1,0 +1,28 @@
+{
+  "featureId": "fix-integration-test-assertions",
+  "reviewedAt": "2026-03-25T14:48:56Z",
+  "commitId": "8fdd834",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The integration test assertion fixes close all previously blocking validation gaps: selective hash-gating behavior is now asserted per-node, custom DB path coverage now includes enrich via dry-run, and cross-language edge checks now prove language-boundary edges exist.",
+    "issues": [
+      {
+        "file": "tests/test_integration.py",
+        "line": 21,
+        "severity": "non_blocking",
+        "description": "Test helper still hardcodes `/Users/kjackowski/.factory/bin` into PATH, which remains environment-specific and can reduce portability."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "A machine-specific PATH entry remains in integration test command helper, indicating portability conventions are still not consistently enforced in test utilities.",
+      "evidence": "tests/test_integration.py `_run_cmd` sets `env[\"PATH\"] = \"/Users/kjackowski/.factory/bin:{env['PATH']}\"`."
+    }
+  ],
+  "addressesFailureFrom": "cross-area-integration",
+  "summary": "Reviewed fix-integration-test-assertions for commit 8fdd834; all three prior blocking issues from cross-area-integration are resolved, so scrutiny verdict is pass."
+}
