@@ -1,0 +1,47 @@
+{
+  "groupId": "build-lock-rerun-2",
+  "testedAt": "2026-03-25T14:15:39.490959+00:00",
+  "isolation": {
+    "surface": "CLI",
+    "tempDir": "/var/folders/_z/nzmlfccx22l25z2y088c_lzh0000gr/T/val-build-011-rerun-2-5xp9ezl8",
+    "dbPath": "/var/folders/_z/nzmlfccx22l25z2y088c_lzh0000gr/T/val-build-011-rerun-2-5xp9ezl8/.codeindex/codeindex.db",
+    "codeindexDir": "/var/folders/_z/nzmlfccx22l25z2y088c_lzh0000gr/T/val-build-011-rerun-2-5xp9ezl8/.codeindex",
+    "pathPrefixApplied": "/Users/kjackowski/.factory/bin"
+  },
+  "toolsUsed": [
+    "Execute"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-BUILD-011",
+      "title": "Concurrent build lock detection",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Create isolated temp workspace and write fresh .codeindex/build.lock JSON with pid=515151 and current UTC started timestamp",
+          "expected": "Fresh lock file exists and is younger than 10 minutes",
+          "observed": "Created lock file at /var/folders/_z/nzmlfccx22l25z2y088c_lzh0000gr/T/val-build-011-rerun-2-5xp9ezl8/.codeindex/build.lock with payload {'pid': 515151, 'started': '2026-03-25T14:15:39.399254+00:00'}"
+        },
+        {
+          "action": "Run command: PATH=\"/Users/kjackowski/.factory/bin:$PATH\" index --db /var/folders/_z/nzmlfccx22l25z2y088c_lzh0000gr/T/val-build-011-rerun-2-5xp9ezl8/.codeindex/codeindex.db build",
+          "expected": "Exit code 2 and stderr contains [ERROR] Another build is running (PID: 515151). Exiting.",
+          "observed": "Exit code 2; stdout and stderr captured to evidence files"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "build-pipeline/build-lock-rerun-2/VAL-BUILD-011-command-output.txt"
+        ],
+        "stdoutFile": "build-pipeline/build-lock-rerun-2/VAL-BUILD-011-stdout.txt",
+        "stderrFile": "build-pipeline/build-lock-rerun-2/VAL-BUILD-011-stderr.txt",
+        "stdout": "<empty>",
+        "stderr": "[SETUP] Applied migration 001_initial.sql (v1)\n[SETUP] Added .codeindex/ to .gitignore\n[ERROR] Another build is running (PID: 515151). Exiting.\n",
+        "exitCode": 2
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 1 assertion: VAL-BUILD-011 PASS."
+}
