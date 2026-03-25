@@ -10,6 +10,8 @@ import pytest
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SAMPLE_PY = FIXTURES_DIR / "sample.py"
+SAMPLE_KT = FIXTURES_DIR / "Sample.kt"
+SAMPLE_TS = FIXTURES_DIR / "sample.ts"
 
 
 class TestParseFile:
@@ -310,3 +312,273 @@ class TestSyntaxErrorHandling:
 
         captured = capsys.readouterr()
         assert "WARNING" in captured.err or "Skipped" in captured.err
+
+
+class TestKotlinParsing:
+    """Test tree-sitter Kotlin parsing."""
+
+    def test_extracts_file_node(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_KT, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        file_nodes = [n for n in nodes if n["node_type"] == "file"]
+        assert len(file_nodes) == 1
+        assert file_nodes[0]["name"] == "Sample.kt"
+        assert file_nodes[0]["language"] == "kotlin"
+
+    def test_extracts_class_node(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_KT, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        class_nodes = [n for n in nodes if n["node_type"] == "class"]
+        assert len(class_nodes) == 1
+        assert class_nodes[0]["name"] == "SampleClass"
+        assert class_nodes[0]["qualified_name"] == "SampleClass"
+
+    def test_extracts_interface_node(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_KT, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        iface_nodes = [n for n in nodes if n["node_type"] == "interface"]
+        assert len(iface_nodes) == 1
+        assert iface_nodes[0]["name"] == "Greeter"
+
+    def test_extracts_object_node(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_KT, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        obj_nodes = [n for n in nodes if n["node_type"] == "object"]
+        assert len(obj_nodes) == 1
+        assert obj_nodes[0]["name"] == "Registry"
+
+    def test_extracts_method_nodes(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_KT, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        method_nodes = [n for n in nodes if n["node_type"] == "method"]
+        names = {n["name"] for n in method_nodes}
+        assert "greet" in names
+        assert "helper" in names
+        assert "register" in names
+        for m in method_nodes:
+            assert "." in m["qualified_name"]
+
+    def test_extracts_function_nodes(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_KT, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        func_nodes = [n for n in nodes if n["node_type"] == "function"]
+        names = {n["name"] for n in func_nodes}
+        assert "topLevelFunction" in names
+
+    def test_node_id_format(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_KT, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        for node in nodes:
+            parts = node["id"].split("::")
+            assert len(parts) == 3, f"Bad node ID format: {node['id']}"
+            assert parts[1] == node["node_type"]
+
+    def test_content_hash_is_sha256(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_KT, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        for node in nodes:
+            expected = hashlib.sha256(node["raw_source"].encode()).hexdigest()
+            assert node["content_hash"] == expected
+
+    def test_start_end_lines(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_KT, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        for node in nodes:
+            assert node["start_line"] >= 1
+            assert node["end_line"] >= node["start_line"]
+
+    def test_signature_present_for_functions_methods(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_KT, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        for node in nodes:
+            if node["node_type"] in ("function", "method"):
+                assert node["signature"] is not None and len(node["signature"]) > 0, (
+                    f"Missing signature for {node['qualified_name']}"
+                )
+
+    def test_docstring_extraction(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_KT, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        greeter = [n for n in nodes if n["name"] == "Greeter"][0]
+        assert greeter["docstring"] is not None
+        assert "sample interface" in greeter["docstring"].lower()
+
+
+class TestTypeScriptParsing:
+    """Test tree-sitter TypeScript parsing."""
+
+    def test_extracts_file_node(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_TS, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        file_nodes = [n for n in nodes if n["node_type"] == "file"]
+        assert len(file_nodes) == 1
+        assert file_nodes[0]["name"] == "sample.ts"
+        assert file_nodes[0]["language"] == "typescript"
+
+    def test_extracts_class_node(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_TS, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        class_nodes = [n for n in nodes if n["node_type"] == "class"]
+        assert len(class_nodes) == 1
+        assert class_nodes[0]["name"] == "SampleClass"
+
+    def test_extracts_interface_node(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_TS, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        iface_nodes = [n for n in nodes if n["node_type"] == "interface"]
+        assert len(iface_nodes) == 1
+        assert iface_nodes[0]["name"] == "Greeter"
+
+    def test_extracts_method_nodes(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_TS, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        method_nodes = [n for n in nodes if n["node_type"] == "method"]
+        names = {n["name"] for n in method_nodes}
+        assert "greet" in names
+        assert "helper" in names
+        assert "constructor" in names
+        for m in method_nodes:
+            assert "." in m["qualified_name"]
+
+    def test_extracts_function_nodes(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_TS, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        func_nodes = [n for n in nodes if n["node_type"] == "function"]
+        names = {n["name"] for n in func_nodes}
+        assert "topLevelFunction" in names
+
+    def test_node_id_format(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_TS, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        for node in nodes:
+            parts = node["id"].split("::")
+            assert len(parts) == 3, f"Bad node ID format: {node['id']}"
+            assert parts[1] == node["node_type"]
+
+    def test_content_hash_is_sha256(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_TS, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        for node in nodes:
+            expected = hashlib.sha256(node["raw_source"].encode()).hexdigest()
+            assert node["content_hash"] == expected
+
+    def test_start_end_lines(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_TS, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        for node in nodes:
+            assert node["start_line"] >= 1
+            assert node["end_line"] >= node["start_line"]
+
+    def test_signature_present_for_functions_methods(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_TS, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        for node in nodes:
+            if node["node_type"] in ("function", "method"):
+                assert node["signature"] is not None and len(node["signature"]) > 0, (
+                    f"Missing signature for {node['qualified_name']}"
+                )
+
+    def test_docstring_extraction(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_TS, db_conn, repo_root=FIXTURES_DIR.parent.parent)
+        greeter = [n for n in nodes if n["name"] == "Greeter"][0]
+        assert greeter["docstring"] is not None
+        assert "sample interface" in greeter["docstring"].lower()
+
+
+class TestUnsupportedLanguage:
+    """Test that unsupported languages log a warning and continue."""
+
+    def test_java_file_warning(self, db_conn, tmp_path, capsys):
+        from indexer.parser import parse_file
+
+        java_file = tmp_path / "Main.java"
+        java_file.write_text("public class Main {}")
+        nodes = parse_file(java_file, db_conn, repo_root=tmp_path)
+        assert nodes == []
+        captured = capsys.readouterr()
+        assert "Unsupported language: java" in captured.err
+
+    def test_go_file_warning(self, db_conn, tmp_path, capsys):
+        from indexer.parser import parse_file
+
+        go_file = tmp_path / "main.go"
+        go_file.write_text("package main")
+        nodes = parse_file(go_file, db_conn, repo_root=tmp_path)
+        assert nodes == []
+        captured = capsys.readouterr()
+        assert "Unsupported language: go" in captured.err
+
+    def test_unsupported_in_directory(self, db_conn, tmp_path, capsys):
+        from indexer.parser import parse_directory
+
+        (tmp_path / "Main.java").write_text("public class Main {}")
+        (tmp_path / "good.py").write_text("def good(): pass\n")
+        parse_directory(tmp_path, db_conn, token_limit=512)
+
+        # Java warning logged
+        captured = capsys.readouterr()
+        assert "Unsupported language: java" in captured.err
+
+        # Python file was still parsed
+        nodes = db_conn.execute("SELECT name FROM nodes WHERE node_type='function'").fetchall()
+        names = {r[0] for r in nodes}
+        assert "good" in names
+
+
+class TestMultiLanguageDirectory:
+    """Test parsing a directory with .py, .kt, and .ts files."""
+
+    def test_parses_all_languages(self, db_conn, tmp_path):
+        from indexer.parser import parse_directory
+
+        (tmp_path / "module.py").write_text('def py_func():\n    pass\n')
+        (tmp_path / "Module.kt").write_text('fun kt_func(): Int {\n    return 1\n}\n')
+        (tmp_path / "module.ts").write_text('function ts_func(): number {\n    return 1;\n}\n')
+
+        parse_directory(tmp_path, db_conn, token_limit=512)
+
+        # Check nodes from all three languages
+        py_nodes = db_conn.execute("SELECT name FROM nodes WHERE language='python' AND node_type='function'").fetchall()
+        kt_nodes = db_conn.execute("SELECT name FROM nodes WHERE language='kotlin' AND node_type='function'").fetchall()
+        ts_nodes = db_conn.execute("SELECT name FROM nodes WHERE language='typescript' AND node_type='function'").fetchall()
+
+        assert {r[0] for r in py_nodes} == {"py_func"}
+        assert {r[0] for r in kt_nodes} == {"kt_func"}
+        assert {r[0] for r in ts_nodes} == {"ts_func"}
+
+    def test_files_table_has_correct_languages(self, db_conn, tmp_path):
+        from indexer.parser import parse_directory
+
+        (tmp_path / "module.py").write_text('def py_func():\n    pass\n')
+        (tmp_path / "Module.kt").write_text('fun kt_func(): Int {\n    return 1\n}\n')
+        (tmp_path / "module.ts").write_text('function ts_func(): number {\n    return 1;\n}\n')
+
+        parse_directory(tmp_path, db_conn, token_limit=512)
+
+        files = db_conn.execute("SELECT path, language FROM files ORDER BY path").fetchall()
+        langs = {r[0]: r[1] for r in files}
+        assert langs["Module.kt"] == "kotlin"
+        assert langs["module.py"] == "python"
+        assert langs["module.ts"] == "typescript"
