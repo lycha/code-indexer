@@ -54,11 +54,11 @@ def test_enrich_dry_run():
     assert "nodes to enrich" in result.stderr
 
 
-def test_query_stub():
-    """index query prints [TODO] to stderr and exits 0."""
-    result = subprocess.run(["index", "query", ""], capture_output=True, text=True)
-    assert result.returncode == 0
-    assert "[TODO]" in result.stderr
+def test_query_no_input_exits_2():
+    """index query with empty input exits 2."""
+    result = subprocess.run(["index", "query"], capture_output=True, text=True)
+    assert result.returncode == 2
+    assert "ERROR" in result.stderr
 
 
 def test_status_stub():

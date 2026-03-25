@@ -216,14 +216,99 @@ def enrich(ctx: click.Context, dry_run: bool, model: str | None) -> None:
 @cli.command()
 @click.argument("query_text", default="")
 @click.option("--type", "query_type", type=click.Choice(["lexical", "graph", "semantic"]), default=None, help="Query type.")
-@click.option("--format", "output_format", type=click.Choice(["text", "json", "jsonl"]), default="text", help="Output format.")
+@click.option("--format", "output_format", type=click.Choice(["text", "json", "jsonl"]), default=None, help="Output format.")
 @click.option("--with-source", is_flag=True, default=False, help="Include raw source in results.")
 @click.option("--top-k", type=int, default=10, help="Maximum number of results.")
 @click.option("--depth", type=int, default=2, help="Graph traversal depth.")
 @click.pass_context
-def query(ctx: click.Context, query_text: str, query_type: str | None, output_format: str, with_source: bool, top_k: int, depth: int) -> None:
+def query(ctx: click.Context, query_text: str, query_type: str | None, output_format: str | None, with_source: bool, top_k: int, depth: int) -> None:
     """Query the code index."""
-    click.echo("[TODO] query not yet implemented", err=True)
+    from indexer.query import (
+        format_results,
+        graph_search,
+        lexical_search,
+        route_query,
+        semantic_search,
+    )
+
+    if not query_text:
+        click.echo("[ERROR] No query text provided.", err=True)
+        sys.exit(2)
+
+    # Auto-detect output format based on TTY
+    if output_format is None:
+        output_format = "text" if sys.stdout.isatty() else "json"
+
+    db_path = resolve_db_path(ctx.obj.get("db_path"))
+
+    # Check DB exists
+    if db_path != ":memory:" and not Path(db_path).exists():
+        click.echo("[ERROR] Index not found. Run 'index init' or 'index build' first.", err=True)
+        sys.exit(1)
+
+    try:
+        conn = get_connection(db_path)
+    except Exception as e:
+        click.echo(f"[ERROR] Database error: {e}", err=True)
+        sys.exit(2)
+
+    try:
+        strategy = route_query(query_text, query_type)
+        click.echo(f"[QUERY] Strategy: {strategy}", err=True)
+
+        results = None
+
+        if strategy == "graph":
+            results = graph_search(
+                node_id=query_text, conn=conn, depth=depth, with_source=with_source,
+            )
+            if results is None:
+                click.echo("[WARNING] Node not found for graph search.", err=True)
+        elif strategy == "lexical":
+            repo_root = str(Path.cwd())
+            results = lexical_search(
+                identifier=query_text, conn=conn, repo_root=repo_root,
+                top_k=top_k, with_source=with_source,
+            )
+            # Fallback: lexical → semantic
+            if not results:
+                click.echo("[QUERY] Lexical returned empty, falling back to semantic.", err=True)
+                results = semantic_search(
+                    query=query_text, conn=conn, top_k=top_k, with_source=with_source,
+                )
+        elif strategy == "semantic":
+            # Check for enrichment
+            enriched = conn.execute(
+                "SELECT COUNT(*) FROM nodes WHERE enriched_at IS NOT NULL"
+            ).fetchone()[0]
+            if enriched == 0:
+                total = conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
+                if total == 0:
+                    click.echo("[ERROR] Index is empty. Run 'index build' first.", err=True)
+                    sys.exit(1)
+                click.echo("[WARNING] No enriched nodes. Semantic results may be poor. Run 'index enrich'.", err=True)
+
+            results = semantic_search(
+                query=query_text, conn=conn, top_k=top_k, with_source=with_source,
+            )
+            # Fallback: semantic → lexical
+            if not results:
+                click.echo("[QUERY] Semantic returned empty, falling back to lexical.", err=True)
+                repo_root = str(Path.cwd())
+                results = lexical_search(
+                    identifier=query_text, conn=conn, repo_root=repo_root,
+                    top_k=top_k, with_source=with_source,
+                )
+
+        output = format_results(results, output_format)
+        if output:
+            click.echo(output)
+
+    except Exception as e:
+        click.echo(f"[ERROR] Query failed: {e}", err=True)
+        sys.exit(2)
+    finally:
+        conn.close()
 
 
 @cli.command()
