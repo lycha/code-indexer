@@ -102,6 +102,32 @@ class TestBuildLockFile:
         assert result.returncode == 2
         assert "[ERROR] Another build is running (PID: 12345)" in result.stderr
 
+    def test_naive_stale_lock_removed(self, fixture_repo):
+        """VAL-BUILD-011: Naive (no tz) stale lock timestamp is handled correctly."""
+        db_dir = fixture_repo / ".codeindex"
+        db_dir.mkdir(exist_ok=True)
+        lock_path = db_dir / "build.lock"
+        naive_time = "2020-01-01T00:00:00"  # no timezone info
+        lock_path.write_text(json.dumps({"pid": 99999, "started": naive_time}))
+        (fixture_repo / "syntax_error.py").unlink(missing_ok=True)
+
+        result = _run_build(str(fixture_repo))
+        assert result.returncode == 0
+        assert "[WARNING] Stale lock file removed" in result.stderr
+
+    def test_naive_fresh_lock_blocks(self, fixture_repo):
+        """VAL-BUILD-011: Naive (no tz) fresh lock timestamp is handled correctly."""
+        db_dir = fixture_repo / ".codeindex"
+        db_dir.mkdir(exist_ok=True)
+        lock_path = db_dir / "build.lock"
+        # Use current UTC time but without timezone info (naive)
+        now_naive = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        lock_path.write_text(json.dumps({"pid": 12345, "started": now_naive}))
+
+        result = _run_build(str(fixture_repo))
+        assert result.returncode == 2
+        assert "[ERROR] Another build is running (PID: 12345)" in result.stderr
+
 
 class TestBuildPhases:
     """VAL-BUILD-004: Phase 1 then Phase 2 sequential with banners."""

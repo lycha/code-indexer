@@ -65,6 +65,8 @@ def _acquire_lock(lock_path: Path) -> None:
             lock_data = json.loads(lock_path.read_text())
             started = lock_data.get("started", "")
             lock_time = datetime.fromisoformat(started)
+            if lock_time.tzinfo is None:
+                lock_time = lock_time.replace(tzinfo=timezone.utc)
             age_seconds = (datetime.now(timezone.utc) - lock_time).total_seconds()
             if age_seconds > 600:
                 lock_path.unlink()
