@@ -95,10 +95,12 @@ index enrich
 Enrichment is hash-gated: re-running `index enrich` after code changes only processes nodes whose content actually changed.
 
 #### Phase 3 Enrichment — Cost Model
+
 **First-run cost (one-time per repository):** enriching a ~14,000-node codebase with Claude Sonnet costs approximately $42–67 depending on average node size. This is paid once when you first index a repository.
 **Incremental cost (every subsequent run):** the indexer is hash-gated. Phase 1 clears `enriched_at` only on nodes whose `content_hash` changed. Phase 3 then only processes those nodes. On a normally-evolving codebase where a sprint touches 1–2% of nodes, a rebuild enrichment run costs under $5 — often under $1.
 
 **What drives cost up:**
+
 - Large-scale refactors that invalidate many `content_hash` values in one go
 - Onboarding many repositories (each pays the first-run cost once)
 - Branch switches between long-lived divergent branches
@@ -170,22 +172,24 @@ index install
 
 Create the `.codeindex/` directory and initialise the database schema. No-op if the DB already exists and the schema version is current. Auto-invoked by `index build` if the DB does not yet exist.
 
-| Option | Description |
-|--------|-------------|
-| `--db PATH` | Path to the SQLite database file |
-| `--no-gitignore-update` | Skip automatic `.gitignore` update |
+
+| Option                  | Description                       |
+| ----------------------- | --------------------------------- |
+| `--db PATH`             | Path to the SQLite database file  |
+| `--no-gitignore-update` | Skip automatic`.gitignore` update |
 
 ### `index build`
 
 Run Phase 1 (AST parse) and Phase 2 (dependency mapping). Bootstraps the DB automatically if not yet initialised.
 
-| Option | Description |
-|--------|-------------|
-| `--db PATH` | Path to the SQLite database file |
-| `--phase PREPARE\|DEPLOY` | Tag this build with a phase boundary label |
-| `--token-limit N` | Max tokens per cAST chunk (default: 512) |
-| `--exclude PATTERN` | Glob patterns to exclude from parsing (repeatable) |
-| `--no-gitignore-update` | Skip automatic `.gitignore` update |
+
+| Option                   | Description                                        |
+| ------------------------ | -------------------------------------------------- |
+| `--db PATH`              | Path to the SQLite database file                   |
+| `--phase PREPARE|DEPLOY` | Tag this build with a phase boundary label         |
+| `--token-limit N`        | Max tokens per cAST chunk (default: 512)           |
+| `--exclude PATTERN`      | Glob patterns to exclude from parsing (repeatable) |
+| `--no-gitignore-update`  | Skip automatic`.gitignore` update                  |
 
 ```bash
 index build --phase PREPARE --exclude "vendor/*"
@@ -195,11 +199,12 @@ index build --phase PREPARE --exclude "vendor/*"
 
 Run Phase 3 — LLM enrichment on unenriched nodes. Only re-enriches nodes whose `content_hash` has changed since the last run.
 
-| Option | Description |
-|--------|-------------|
-| `--db PATH` | Path to the SQLite database file |
-| `--dry-run` | Show what would be enriched without making API calls |
-| `--model MODEL` | Override the LLM model for enrichment |
+
+| Option          | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| `--db PATH`     | Path to the SQLite database file                     |
+| `--dry-run`     | Show what would be enriched without making API calls |
+| `--model MODEL` | Override the LLM model for enrichment                |
 
 ```bash
 index enrich --dry-run
@@ -209,14 +214,15 @@ index enrich --dry-run
 
 Query the code index. The query router auto-selects a strategy (lexical, graph, or semantic) based on input, with cross-strategy fallback when results are empty.
 
-| Option | Description |
-|--------|-------------|
-| `--db PATH` | Path to the SQLite database file |
-| `--type lexical\|graph\|semantic` | Force a specific query strategy |
-| `--format text\|json\|jsonl` | Output format (default: `text` for TTY, `json` otherwise) |
-| `--with-source` | Include raw source in results |
-| `--top-k N` | Maximum number of results (default: 10) |
-| `--depth N` | Graph traversal depth (default: 2) |
+
+| Option                          | Description                                              |
+| ------------------------------- | -------------------------------------------------------- |
+| `--db PATH`                     | Path to the SQLite database file                         |
+| `--type lexical|graph|semantic` | Force a specific query strategy                          |
+| `--format text|json|jsonl`      | Output format (default:`text` for TTY, `json` otherwise) |
+| `--with-source`                 | Include raw source in results                            |
+| `--top-k N`                     | Maximum number of results (default: 10)                  |
+| `--depth N`                     | Graph traversal depth (default: 2)                       |
 
 ```bash
 # Human-readable lexical lookup
@@ -230,17 +236,19 @@ index query "cart loses items after discount" --type semantic --format jsonl
 
 Show index health: node count, edge count, unenriched nodes, last build time, and schema version.
 
-| Option | Description |
-|--------|-------------|
+
+| Option      | Description                      |
+| ----------- | -------------------------------- |
 | `--db PATH` | Path to the SQLite database file |
 
 ### `index reset`
 
 Drop and recreate all database tables.
 
-| Option | Description |
-|--------|-------------|
-| `--db PATH` | Path to the SQLite database file |
+
+| Option        | Description                                                 |
+| ------------- | ----------------------------------------------------------- |
+| `--db PATH`   | Path to the SQLite database file                            |
 | `--yes`, `-y` | Skip confirmation prompt (required for non-interactive use) |
 
 ```bash
@@ -252,9 +260,7 @@ index reset --yes && index build --phase PREPARE
 The indexing pipeline runs in three phases:
 
 1. **AST Parse** — Extracts files, classes, functions, methods, signatures, docstrings, and line ranges using Python's `ast` module (for `.py` files) and `tree-sitter` (for Kotlin and TypeScript). Large nodes are split into chunks within a configurable token limit (cAST split-merge).
-
 2. **Dependency Map** — For each node, runs `ripgrep` to find all call sites and identifier references across the codebase, then resolves import statements to target nodes. Writes directed edges (`calls`, `imports`, `inherits`, `overrides`, `references`, `instantiates`) into the graph.
-
 3. **LLM Enrich** — Sends each node's signature, docstring, and immediate graph neighbours to the Claude API. Receives back a `semantic_summary`, `domain_tags`, and `inferred_responsibility`. Only re-runs on nodes whose content hash has changed (hash-gated).
 
 The resulting SQLite database (`.codeindex/codeindex.db`) supports three query paths:
@@ -267,30 +273,33 @@ All progress and diagnostic output goes to **stderr**; only structured query res
 
 ## Supported Languages
 
-| Language | Parser |
-|----------|--------|
-| Python | `ast` (stdlib) |
-| Kotlin | `tree-sitter-kotlin` |
+
+| Language   | Parser                   |
+| ---------- | ------------------------ |
+| Python     | `ast` (stdlib)           |
+| Kotlin     | `tree-sitter-kotlin`     |
 | TypeScript | `tree-sitter-typescript` |
-| Java | `tree-sitter-java` |
-| Ruby | `tree-sitter-ruby` |
+| Java       | `tree-sitter-java`       |
+| Ruby       | `tree-sitter-ruby`       |
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | For `enrich` | Anthropic API key for LLM enrichment |
-| `CODEINDEX_DB` | No | Override default database path (`.codeindex/codeindex.db`) |
+
+| Variable            | Required    | Description                                                |
+| ------------------- | ----------- | ---------------------------------------------------------- |
+| `ANTHROPIC_API_KEY` | For`enrich` | Anthropic API key for LLM enrichment                       |
+| `CODEINDEX_DB`      | No          | Override default database path (`.codeindex/codeindex.db`) |
 
 Database path resolution order: `--db` flag → `CODEINDEX_DB` env var → `.codeindex/codeindex.db` → exit 2.
 
 ## Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| `0` | Success — all phases completed without warnings |
-| `1` | Completed with warnings (e.g. parse errors, unenriched nodes) |
-| `2` | Fatal error (e.g. ripgrep missing, DB locked, schema mismatch) |
+
+| Code | Meaning                                                        |
+| ---- | -------------------------------------------------------------- |
+| `0`  | Success — all phases completed without warnings               |
+| `1`  | Completed with warnings (e.g. parse errors, unenriched nodes)  |
+| `2`  | Fatal error (e.g. ripgrep missing, DB locked, schema mismatch) |
 
 ## Development
 
@@ -301,3 +310,20 @@ pip install -e ".[dev]"
 # Run tests
 python3 -m pytest tests/ -v
 ```
+
+## Research Foundation
+
+The code indexer's three-phase architecture is grounded in peer-reviewed research on repository-level code generation
+and token optimisation for LLM agents.
+
+### Phase 1 — AST-based chunking (cAST)
+
+Traditional RAG pipelines split source code at fixed token counts, severing functions from their bodies and isolating return  statements from surrounding logic. The cAST methodology (_Enhancing Code Retrieval-Augmented Generation with Structural Chunking via Abstract Syntax Tree, arXiv:2506.15655v1, EMNLP 2025_) addresses this by parsing code into complete Abstract Syntax Trees and applying a recursive split-then-merge process — ensuring every chunk is a syntactically complete, semantically coherent unit. Empirical results: +4.3 points Recall@5 on RepoEval, +2.67 points Pass@1 on SWE-bench over fixed-size chunking baselines.
+
+### Phase 2 — Index-free lexical retrieval (GrepRAG)
+
+Software logic depends on exact, deterministic identifiers. Semantic vector search struggles to locate custom entities like `auth_token_v2_middleware_factory;` lexical search finds them instantly with zero index overhead. GrepRAG (_An Empirical Study and Optimization of Grep-Like Retrieval for Code Completion, ResearchGate/400340391_) demonstrated a **7.04–15.58% relative improvement in exact code match** over graph-based semantic baselines across CrossCodeEval and RepoEval-Updated.
+
+### Phase 3 — LLM semantic enrichment
+
+When agents navigate repositories in response to natural language queries (bug reports, product requirements), a vocabulary mismatch blocks pure structural indexing. Hierarchical summarisation research (_Repository-Level Code Understanding by LLMs via Hierarchical Summarization, ResearchGate/391739021_) showed that LLM-generated summaries enable semantic navigation with Pass@10 of 0.89 on real-world Jira issue datasets. Critically, enrichment runs once at build time and is amortised across all subsequent queries — only changed nodes require re-enrichment.
