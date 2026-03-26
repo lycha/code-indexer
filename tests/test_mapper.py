@@ -27,7 +27,7 @@ def _insert_node(conn, node_id, file_path="app.py", node_type="function", name="
     conn.commit()
 
 
-def _insert_edge(conn, source_id, target_id, edge_type="calls", call_site_line=None):
+def _insert_edge(conn, source_id, target_id, edge_type="calls", call_site_line=0):
     """Helper to insert an edge."""
     conn.execute(
         "INSERT INTO edges (source_id, target_id, edge_type, call_site_line) "
@@ -40,9 +40,9 @@ def _insert_edge(conn, source_id, target_id, edge_type="calls", call_site_line=N
 class TestEdgeInsertion:
     """Test that edges are correctly inserted during mapping."""
 
-    @patch("indexer.mapper.shutil.which", return_value="/usr/bin/rg")
+    @patch("indexer.mapper.find_rg", return_value="/usr/bin/rg")
     @patch("indexer.mapper.subprocess.run")
-    def test_edges_inserted_for_ripgrep_matches(self, mock_run, mock_which, db_conn):
+    def test_edges_inserted_for_ripgrep_matches(self, mock_run, mock_find_rg, db_conn):
         """Edges are created when ripgrep finds identifier usage."""
         # Set up nodes: a function 'greet' defined in app.py, used in main.py
         _insert_node(db_conn, "app.py::function::greet", "app.py", "function", "greet",
@@ -229,8 +229,8 @@ class TestOverridesEdgeType:
 class TestRipgrepNotFound:
     """Test ripgrep not found error."""
 
-    @patch("indexer.mapper.shutil.which", return_value=None)
-    def test_exits_2_when_rg_not_found(self, mock_which, db_conn):
+    @patch("indexer.mapper.find_rg", side_effect=SystemExit(2))
+    def test_exits_2_when_rg_not_found(self, mock_find_rg, db_conn):
         """map_dependencies exits 2 if ripgrep is not found."""
         _insert_node(db_conn, "a.py::function::foo", "a.py", "function", "foo", "foo", 1, 5)
 
@@ -242,9 +242,9 @@ class TestRipgrepNotFound:
 class TestCallerReResolution:
     """Test that callers of changed nodes get re-resolved."""
 
-    @patch("indexer.mapper.shutil.which", return_value="/usr/bin/rg")
+    @patch("indexer.mapper.find_rg", return_value="/usr/bin/rg")
     @patch("indexer.mapper.subprocess.run")
-    def test_callers_re_resolved(self, mock_run, mock_which, db_conn):
+    def test_callers_re_resolved(self, mock_run, mock_find_rg, db_conn):
         """Callers of changed nodes have their outbound edges re-resolved."""
         # Setup: foo calls bar, bar changes
         _insert_node(db_conn, "a.py::function::foo", "a.py", "function", "foo", "foo", 1, 5)

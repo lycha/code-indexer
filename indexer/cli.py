@@ -1,5 +1,6 @@
 """CLI entry point for the code indexer."""
 
+import fcntl
 import json
 import os
 import platform
@@ -24,9 +25,9 @@ def cli(ctx: click.Context, db_path: str | None) -> None:
     ctx.obj["db_path"] = db_path
 
 
-def _update_gitignore() -> None:
+def _update_gitignore(repo_root: Path) -> None:
     """Append .codeindex/ to .gitignore if not already present."""
-    gitignore_path = Path(".gitignore")
+    gitignore_path = repo_root / ".gitignore"
     entry = ".codeindex/"
 
     if gitignore_path.exists():
@@ -55,7 +56,7 @@ def init(ctx: click.Context, no_gitignore_update: bool) -> None:
     db_path = resolve_db_path(ctx.obj.get("db_path"))
     bootstrap(db_path)
     if not no_gitignore_update:
-        _update_gitignore()
+        _update_gitignore(Path.cwd())
 
 
 @cli.command()
@@ -99,8 +100,21 @@ def install(ctx: click.Context) -> None:
         sys.exit(2)
 
     for label, cmd in commands:
+        if any("sudo" in str(c) for c in cmd):
+            if sys.stdin.isatty():
+                click.echo(f"[INSTALL] This will run: {' '.join(cmd)}", err=True)
+                click.echo("Continue? [y/N] ", err=True, nl=False)
+                answer = input().strip().lower()
+                if answer != "y":
+                    click.echo("[INSTALL] Cancelled.", err=True)
+                    sys.exit(2)
+            # Non-TTY: proceed (user can't interact)
         click.echo(f"[INSTALL] Using {label}: {' '.join(cmd)}", err=True)
-        result = subprocess.run(cmd)
+        try:
+            result = subprocess.run(cmd, timeout=120)
+        except subprocess.TimeoutExpired:
+            click.echo(f"[ERROR] {label} install timed out after 120 seconds.", err=True)
+            sys.exit(2)
         if result.returncode != 0:
             click.echo(f"[ERROR] {label} install failed (exit {result.returncode}).", err=True)
             sys.exit(2)
@@ -112,56 +126,30 @@ def install(ctx: click.Context) -> None:
         sys.exit(2)
 
 
-def _acquire_lock(lock_path: Path) -> None:
-    """Acquire build lock file. Exits 2 if concurrent build detected."""
+def _acquire_lock(lock_path: Path):
+    """Acquire build lock using flock. Returns the open file descriptor."""
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if lock_path.exists():
-        # Check if stale (>10 minutes)
-        try:
-            lock_data = json.loads(lock_path.read_text())
-            started = lock_data.get("started", "")
-            lock_time = datetime.fromisoformat(started)
-            if lock_time.tzinfo is None:
-                lock_time = lock_time.replace(tzinfo=timezone.utc)
-            age_seconds = (datetime.now(timezone.utc) - lock_time).total_seconds()
-            if age_seconds > 600:
-                lock_path.unlink()
-                click.echo("[WARNING] Stale lock file removed", err=True)
-            else:
-                pid = lock_data.get("pid", "unknown")
-                click.echo(
-                    f"[ERROR] Another build is running (PID: {pid}). Exiting.",
-                    err=True,
-                )
-                sys.exit(2)
-        except (json.JSONDecodeError, ValueError, OSError):
-            # Corrupt lock file — treat as stale
-            lock_path.unlink(missing_ok=True)
-            click.echo("[WARNING] Stale lock file removed", err=True)
-
-    # Create lock file exclusively
+    lock_fd = open(lock_path, 'w')
     try:
-        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        lock_data = {
-            "pid": os.getpid(),
-            "started": datetime.now(timezone.utc).isoformat(),
-        }
-        os.write(fd, json.dumps(lock_data).encode())
-        os.close(fd)
-    except FileExistsError:
-        click.echo(
-            "[ERROR] Another build is running. Exiting.",
-            err=True,
-        )
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock_fd.close()
+        click.echo("[ERROR] Another build is running. Exiting.", err=True)
         sys.exit(2)
+    # Write PID for diagnostics
+    lock_fd.write(json.dumps({"pid": os.getpid(), "started": datetime.now(timezone.utc).isoformat()}))
+    lock_fd.flush()
+    return lock_fd
 
 
-def _release_lock(lock_path: Path) -> None:
-    """Release build lock file."""
+def _release_lock(lock_fd):
+    """Release build lock."""
     try:
-        lock_path.unlink(missing_ok=True)
-    except OSError:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        name = lock_fd.name
+        lock_fd.close()
+        os.unlink(name)
+    except (OSError, ValueError):
         pass
 
 
@@ -178,23 +166,23 @@ def build(ctx: click.Context, phase: str | None, token_limit: int, exclude: tupl
 
     db_path = resolve_db_path(ctx.obj.get("db_path"))
     lock_path = Path(db_path).parent / "build.lock"
+    repo_root = Path.cwd()
 
     # Auto-bootstrap DB
     bootstrap(db_path)
     if not no_gitignore_update:
-        _update_gitignore()
+        _update_gitignore(repo_root)
 
-    _acquire_lock(lock_path)
+    lock_fd = _acquire_lock(lock_path)
     exit_code = 0
     conn = None
     try:
         conn = get_connection(db_path)
-        repo_root = Path.cwd()
 
         # Phase 1: Parse
         click.echo("[PHASE 1] Parsing source files...", err=True)
         t0 = time.monotonic()
-        warnings = parse_directory(repo_root, conn, token_limit=token_limit, exclude_patterns=list(exclude) if exclude else None)
+        warnings, changed_files = parse_directory(repo_root, conn, token_limit=token_limit, exclude_patterns=list(exclude) if exclude else None)
         phase1_elapsed = time.monotonic() - t0
         click.echo(f"[PHASE 1] Done in {phase1_elapsed:.1f}s", err=True)
         if warnings:
@@ -202,17 +190,27 @@ def build(ctx: click.Context, phase: str | None, token_limit: int, exclude: tupl
                 click.echo(f"[WARNING] {w}", err=True)
             exit_code = 1
 
-        # Collect all node IDs for Phase 2
-        all_node_ids = [
-            r[0] for r in conn.execute("SELECT id FROM nodes").fetchall()
-        ]
+        # Collect node IDs only from changed files for Phase 2
+        if changed_files:
+            placeholders = ",".join("?" for _ in changed_files)
+            changed_node_ids = [
+                r[0] for r in conn.execute(
+                    f"SELECT id FROM nodes WHERE file_path IN ({placeholders})",
+                    list(changed_files),
+                ).fetchall()
+            ]
+        else:
+            changed_node_ids = []
 
-        # Phase 2: Map dependencies
-        click.echo("[PHASE 2] Mapping dependencies...", err=True)
-        t0 = time.monotonic()
-        edges_inserted = map_dependencies(all_node_ids, conn, str(repo_root))
-        phase2_elapsed = time.monotonic() - t0
-        click.echo(f"[PHASE 2] Done in {phase2_elapsed:.1f}s", err=True)
+        # Phase 2: Map dependencies (skip if nothing changed)
+        if not changed_node_ids:
+            click.echo("[PHASE 2] No files changed, skipping dependency mapping.", err=True)
+        else:
+            click.echo(f"[PHASE 2] Mapping dependencies for {len(changed_node_ids)} nodes (from {len(changed_files)} changed files)...", err=True)
+            t0 = time.monotonic()
+            edges_inserted = map_dependencies(changed_node_ids, conn, str(repo_root))
+            phase2_elapsed = time.monotonic() - t0
+            click.echo(f"[PHASE 2] Done in {phase2_elapsed:.1f}s", err=True)
 
         # Update index_meta
         now = datetime.now(timezone.utc).isoformat()
@@ -251,7 +249,7 @@ def build(ctx: click.Context, phase: str | None, token_limit: int, exclude: tupl
     finally:
         if conn:
             conn.close()
-        _release_lock(lock_path)
+        _release_lock(lock_fd)
 
     if exit_code:
         sys.exit(exit_code)

@@ -2,13 +2,16 @@
 
 import json
 import re
-import shutil
+import sqlite3
 import subprocess
-import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import click
+
+from indexer.utils import find_rg
+
+__all__ = ["lexical_search", "semantic_search", "graph_search", "route_query", "format_results"]
 
 
 @dataclass
@@ -83,29 +86,29 @@ def route_query(query_text: str, query_type: str | None) -> str:
 # Lexical search  (ripgrep → node lookup → re-rank)
 # ---------------------------------------------------------------------------
 
-def _find_rg() -> str | None:
-    """Find ripgrep binary. Returns *None* if not found."""
-    return shutil.which("rg")
-
-
 def lexical_search(
     identifier: str,
-    conn,
+    conn: sqlite3.Connection,
     repo_root: str,
     top_k: int = 10,
     with_source: bool = False,
 ) -> list[NodeResult]:
     """Ripgrep exact word match → node lookup → re-rank by specificity."""
-    rg = _find_rg()
+    rg = find_rg()
     if rg is None:
         click.echo("[WARNING] ripgrep not found — lexical search unavailable", err=True)
         return []
 
-    result = subprocess.run(
-        [rg, "--json", "-n", "-w", identifier, repo_root],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            [rg, "--json", "-n", "-w", "-F", identifier, repo_root],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        click.echo("[WARNING] ripgrep timed out — lexical search unavailable", err=True)
+        return []
 
     matches: list[tuple[str, int]] = []
     repo_root_path = Path(repo_root)
@@ -130,33 +133,54 @@ def lexical_search(
             continue
         matches.append((rel, lnum))
 
-    # Resolve matches → nodes, count occurrences per node for ranking
+    if not matches:
+        return []
+
+    # --- Batch-resolve matches → nodes (avoid N+1 queries) ----------------
+    # 1. Collect unique file paths and fetch all candidate nodes in one query
+    unique_paths = list({m[0] for m in matches})
+    ph = ",".join("?" * len(unique_paths))
+    candidate_rows = conn.execute(
+        f"SELECT id, file_path, node_type, qualified_name, signature, docstring, "
+        f"start_line, end_line, semantic_summary, domain_tags, raw_source, name "
+        f"FROM nodes WHERE file_path IN ({ph})",
+        unique_paths,
+    ).fetchall()
+
+    # 2. Build in-memory lookup: file_path → [(start, end, span, row), ...] sorted by span
+    file_nodes: dict[str, list[tuple[int, int, int, tuple]]] = {}
+    for row in candidate_rows:
+        fp = row[1]
+        start, end = row[6], row[7]
+        span = end - start
+        file_nodes.setdefault(fp, []).append((start, end, span, row))
+    for entries in file_nodes.values():
+        entries.sort(key=lambda e: e[2])  # smallest span first
+
+    # 3. For each match, find enclosing node (smallest span) in-memory
     node_hits: dict[str, int] = {}
     for rel_path, lnum in matches:
-        row = conn.execute(
-            "SELECT id FROM nodes "
-            "WHERE file_path = ? AND start_line <= ? AND end_line >= ? "
-            "ORDER BY (end_line - start_line) ASC LIMIT 1",
-            (rel_path, lnum, lnum),
-        ).fetchone()
-        if row:
-            nid = row[0]
-            node_hits[nid] = node_hits.get(nid, 0) + 1
+        entries = file_nodes.get(rel_path)
+        if not entries:
+            continue
+        for start, end, _span, row in entries:
+            if start <= lnum <= end:
+                nid = row[0]
+                node_hits[nid] = node_hits.get(nid, 0) + 1
+                break
 
     if not node_hits:
         return []
 
     total_matches = len(matches)
 
+    # 4. Build a lookup from rows we already fetched
+    row_by_id: dict[str, tuple] = {row[0]: row for row in candidate_rows}
+
     # Fetch node data & score
     scored: list[tuple[float, NodeResult]] = []
     for nid, count in node_hits.items():
-        row = conn.execute(
-            "SELECT id, file_path, node_type, qualified_name, signature, docstring, "
-            "start_line, end_line, semantic_summary, domain_tags, raw_source, name "
-            "FROM nodes WHERE id = ?",
-            (nid,),
-        ).fetchone()
+        row = row_by_id.get(nid)
         if not row:
             continue
 
@@ -202,13 +226,16 @@ def lexical_search(
 
 def graph_search(
     node_id: str,
-    conn,
+    conn: sqlite3.Connection,
     depth: int = 2,
     edge_types: list[str] | None = None,
     direction: str = "both",
     with_source: bool = False,
 ) -> GraphResult | None:
     """Recursive CTE graph traversal up to *depth* hops."""
+
+    # Cap depth to avoid runaway exploration
+    depth = min(depth, 10)
 
     # Verify root exists
     root_row = conn.execute(
@@ -264,22 +291,21 @@ def graph_search(
         JOIN edges e ON {cte_join}{et_clause}
         WHERE t.hop < ?
     )
-    SELECT DISTINCT node_id FROM traverse
+    SELECT DISTINCT node_id FROM traverse LIMIT 1000
     """
     params = [node_id] + et_params + [depth]
     visited_ids = {r[0] for r in conn.execute(sql, params).fetchall()}
 
-    # Fetch all nodes
-    nodes: list[NodeResult] = []
-    for nid in visited_ids:
-        row = conn.execute(
-            "SELECT id, file_path, node_type, qualified_name, signature, docstring, "
-            "start_line, end_line, semantic_summary, domain_tags, raw_source "
-            "FROM nodes WHERE id = ?",
-            (nid,),
-        ).fetchone()
-        if row:
-            nodes.append(_make_node(row))
+    # Batch-fetch all visited nodes in a single query
+    id_list = list(visited_ids)
+    ph = ",".join("?" * len(id_list))
+    node_rows = conn.execute(
+        f"SELECT id, file_path, node_type, qualified_name, signature, docstring, "
+        f"start_line, end_line, semantic_summary, domain_tags, raw_source "
+        f"FROM nodes WHERE id IN ({ph})",
+        id_list,
+    ).fetchall()
+    nodes: list[NodeResult] = [_make_node(row) for row in node_rows]
 
     # Fetch edges between visited nodes
     if len(visited_ids) < 2:
@@ -303,7 +329,7 @@ def graph_search(
 
 def semantic_search(
     query: str,
-    conn,
+    conn: sqlite3.Connection,
     top_k: int = 10,
     with_source: bool = False,
 ) -> list[NodeResult]:
@@ -317,7 +343,7 @@ def semantic_search(
 
     # Escape FTS5 special characters by quoting each term
     terms = query.split()
-    fts_query = " OR ".join(f'"{t}"' for t in terms)
+    fts_query = " OR ".join(f'"{t.replace(chr(34), chr(34)*2)}"' for t in terms)
 
     try:
         rows = conn.execute(

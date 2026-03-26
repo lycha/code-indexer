@@ -49,7 +49,7 @@ class TestBootstrap:
             "SELECT value FROM index_meta WHERE key = 'schema_version'"
         ).fetchone()
         assert row is not None
-        assert row[0] == "1"
+        assert row[0] == "2"
         conn.close()
 
     def test_bootstrap_creates_directory(self, tmp_path):
@@ -70,7 +70,7 @@ class TestBootstrap:
         row = conn.execute(
             "SELECT value FROM index_meta WHERE key = 'schema_version'"
         ).fetchone()
-        assert row[0] == "1"
+        assert row[0] == "2"
         conn.close()
 
     def test_downgrade_detection(self, tmp_path):
@@ -107,12 +107,12 @@ class TestBootstrap:
         # (all CREATE statements use IF NOT EXISTS so existing tables don't crash)
         bootstrap(db_path)
 
-        # Verify schema_version is updated back to 1
+        # Verify schema_version is updated back to 2
         conn = get_connection(db_path)
         row = conn.execute(
             "SELECT value FROM index_meta WHERE key = 'schema_version'"
         ).fetchone()
-        assert row[0] == "1"
+        assert row[0] == "2"
 
         # Verify all tables still exist and are queryable
         conn.execute("SELECT * FROM nodes LIMIT 0")
@@ -150,7 +150,7 @@ class TestBootstrap:
         row = conn.execute(
             "SELECT value FROM index_meta WHERE key = 'schema_version'"
         ).fetchone()
-        assert row[0] == "1"
+        assert row[0] == "2"
         conn.close()
 
 
@@ -215,11 +215,11 @@ class TestDbConnFixture:
         db_conn.execute("SELECT * FROM index_meta LIMIT 0")
 
     def test_schema_version_set(self, db_conn):
-        """db_conn fixture has schema_version=1."""
+        """db_conn fixture has schema_version=2."""
         row = db_conn.execute(
             "SELECT value FROM index_meta WHERE key = 'schema_version'"
         ).fetchone()
-        assert row[0] == "1"
+        assert row[0] == "2"
 
     def test_node_type_check_constraint(self, db_conn):
         """nodes table enforces CHECK constraint on node_type."""
@@ -251,7 +251,7 @@ class TestDbConnFixture:
 
     def test_valid_node_types(self, db_conn):
         """All valid node_type values are accepted."""
-        for i, ntype in enumerate(('file', 'class', 'function', 'method', 'interface', 'object')):
+        for i, ntype in enumerate(('file', 'class', 'function', 'method', 'interface', 'object', 'module')):
             db_conn.execute(
                 "INSERT INTO nodes (id, file_path, node_type, name, qualified_name, "
                 "start_line, end_line, language, content_hash) "

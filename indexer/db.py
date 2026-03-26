@@ -7,6 +7,8 @@ from pathlib import Path
 
 import click
 
+__all__ = ["bootstrap", "get_connection", "resolve_db_path"]
+
 _MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
@@ -15,6 +17,7 @@ def get_connection(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
@@ -99,12 +102,11 @@ def bootstrap(db_path: str) -> None:
 
 
 def resolve_db_path(db_arg: str | None) -> str:
-    """Resolve the database path using 4-step resolution.
+    """Resolve the database path using 3-step resolution.
 
     1. --db argument
     2. CODEINDEX_DB environment variable
     3. .codeindex/codeindex.db (default)
-    4. Exit 2 with actionable message
     """
     # Step 1: explicit --db argument
     if db_arg:

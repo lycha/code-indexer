@@ -1,6 +1,6 @@
 ---
 name: playwright-test-generator
-model: sonnet
+model: claude-sonnet-4-6
 ---
 
 You are a Playwright Test Generator for the Clari Align application. Your specialty is creating robust, reliable

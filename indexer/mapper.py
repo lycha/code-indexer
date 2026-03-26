@@ -2,19 +2,22 @@
 
 import json
 import os
-import shutil
+import sqlite3
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
 import click
 
+from indexer.utils import find_rg
+
+__all__ = ["map_dependencies"]
+
 _SQL_BATCH_SIZE = 900
 _RG_BATCH_SIZE = 200
 
 
-def _batched_query(conn, query_template: str, params: list, *, extra_params: list | None = None) -> list:
+def _batched_query(conn: sqlite3.Connection, query_template: str, params: list, *, extra_params: list | None = None) -> list:
     """Execute a query with IN-clause params in batches to avoid SQLite variable limits.
 
     query_template must contain a single '{}' placeholder for the IN-clause.
@@ -30,7 +33,7 @@ def _batched_query(conn, query_template: str, params: list, *, extra_params: lis
     return results
 
 
-def _batched_execute(conn, query_template: str, params: list) -> int:
+def _batched_execute(conn: sqlite3.Connection, query_template: str, params: list) -> int:
     """Execute a write statement with IN-clause params in batches.
 
     Returns total rowcount across batches.
@@ -45,19 +48,7 @@ def _batched_execute(conn, query_template: str, params: list) -> int:
     return total
 
 
-def _find_rg() -> str:
-    """Find ripgrep binary. Exit 2 if not found."""
-    rg = shutil.which("rg")
-    if rg is None:
-        click.echo(
-            "[ERROR] ripgrep not found. Install it: https://github.com/BurntSushi/ripgrep#installation",
-            err=True,
-        )
-        sys.exit(2)
-    return rg
-
-
-def _get_changed_nodes(conn, changed_file_paths: list[str]) -> list[dict]:
+def _get_changed_nodes(conn: sqlite3.Connection, changed_file_paths: list[str]) -> list[dict]:
     """Get all nodes belonging to changed files."""
     if not changed_file_paths:
         return []
@@ -100,7 +91,7 @@ class _NodeIndex:
     and looking up node metadata by ID, replacing per-match SQL queries.
     """
 
-    def __init__(self, conn):
+    def __init__(self, conn: sqlite3.Connection):
         rows = conn.execute(
             "SELECT id, file_path, node_type, name, qualified_name, start_line, end_line "
             "FROM nodes"
@@ -183,11 +174,16 @@ def _classify_edge_type(source_node: dict, target_node_id: str, identifier: str,
 
 def _run_ripgrep(rg_path: str, identifier: str, repo_root: str) -> list[dict]:
     """Run ripgrep for a single identifier, return parsed JSON matches."""
-    result = subprocess.run(
-        [rg_path, "--json", "-n", "-w", identifier, repo_root],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            [rg_path, "--json", "-n", "-w", "-F", identifier, repo_root],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        click.echo(f"[WARNING] ripgrep timed out searching for '{identifier}', skipping", err=True)
+        return []
     return _parse_rg_json(result.stdout)
 
 
@@ -211,11 +207,19 @@ def _run_ripgrep_batch(rg_path: str, identifiers: list[str], repo_root: str) -> 
             with os.fdopen(fd, "w") as f:
                 for ident in batch:
                     f.write(ident + "\n")
-            result = subprocess.run(
-                [rg_path, "--json", "-n", "-w", "-f", pat_path, repo_root],
-                capture_output=True,
-                text=True,
-            )
+            try:
+                result = subprocess.run(
+                    [rg_path, "--json", "-n", "-w", "-F", "-f", pat_path, repo_root],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+            except subprocess.TimeoutExpired:
+                click.echo(
+                    f"[WARNING] ripgrep timed out on batch of {len(batch)} identifiers, skipping",
+                    err=True,
+                )
+                continue
             for line in result.stdout.splitlines():
                 if not line.strip():
                     continue
@@ -270,7 +274,7 @@ def _parse_rg_json(stdout: str) -> list[dict]:
 # Edge operations
 # ---------------------------------------------------------------------------
 
-def delete_outbound_edges(conn, changed_node_ids: list[str]) -> int:
+def delete_outbound_edges(conn: sqlite3.Connection, changed_node_ids: list[str]) -> int:
     """Delete outbound edges from changed nodes only.
 
     Returns count of deleted edges.
@@ -284,7 +288,7 @@ def delete_outbound_edges(conn, changed_node_ids: list[str]) -> int:
     )
 
 
-def purge_dangling_edges(conn) -> int:
+def purge_dangling_edges(conn: sqlite3.Connection) -> int:
     """Remove inbound edges to deleted/renamed nodes (target no longer exists).
 
     Returns count of purged edges.
@@ -295,7 +299,7 @@ def purge_dangling_edges(conn) -> int:
     return cursor.rowcount
 
 
-def rebuild_fts(conn) -> None:
+def rebuild_fts(conn: sqlite3.Connection) -> None:
     """Unconditionally rebuild nodes_fts virtual table."""
     conn.execute("INSERT INTO nodes_fts(nodes_fts) VALUES('rebuild')")
     conn.commit()
@@ -311,7 +315,7 @@ def _process_matches(
     repo_root: str,
     repo_root_path: Path,
     node_index: _NodeIndex,
-    conn,
+    conn: sqlite3.Connection,
 ) -> int:
     """Run batched ripgrep for a set of nodes and insert edges.
 
@@ -368,7 +372,7 @@ def _process_matches(
                         (source_node_id, target_node["id"], edge_type, match["line"]),
                     )
                     edges_inserted += 1
-                except Exception:
+                except sqlite3.IntegrityError:
                     pass
 
     return edges_inserted
@@ -378,7 +382,7 @@ def _process_matches(
 # Public API
 # ---------------------------------------------------------------------------
 
-def map_dependencies(changed_node_ids: list[str], conn, repo_root: str) -> int:
+def map_dependencies(changed_node_ids: list[str], conn: sqlite3.Connection, repo_root: str) -> int:
     """Map dependencies for changed nodes via ripgrep.
 
     Steps:
@@ -391,7 +395,7 @@ def map_dependencies(changed_node_ids: list[str], conn, repo_root: str) -> int:
 
     Returns total edges inserted.
     """
-    rg_path = _find_rg()
+    rg_path = find_rg(required=True)
     repo_root_path = Path(repo_root)
 
     if not changed_node_ids:

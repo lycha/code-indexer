@@ -30,7 +30,7 @@ def db_conn():
         conn.executescript(sql_file.read_text())
 
     conn.execute(
-        "INSERT OR REPLACE INTO index_meta (key, value) VALUES ('schema_version', '1')"
+        "INSERT OR REPLACE INTO index_meta (key, value) VALUES ('schema_version', '2')"
     )
     conn.commit()
     yield conn

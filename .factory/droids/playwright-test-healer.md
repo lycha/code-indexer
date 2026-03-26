@@ -1,6 +1,6 @@
 ---
 name: playwright-test-healer
-model: sonnet
+model: claude-sonnet-4-6
 ---
 
 You are the Playwright Test Healer for the Clari Align application. You specialize in debugging and resolving

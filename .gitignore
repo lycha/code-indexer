@@ -5,3 +5,8 @@ __pycache__/
 .codeindex/
 .DS_Store
 .idea/
+/eval/
+code-indexer.iml
+/.factory/validation
+REVIEW.md
+code-indexer.iml

@@ -194,7 +194,7 @@ class TestGraphSearch:
 class TestLexicalSearch:
     def test_returns_empty_when_no_rg(self, populated_db, monkeypatch):
         """When ripgrep is not found, lexical search returns empty."""
-        monkeypatch.setattr("indexer.query.shutil.which", lambda x: None)
+        monkeypatch.setattr("indexer.query.find_rg", lambda: None)
         results = lexical_search("parse_file", populated_db, "/tmp", top_k=10)
         assert results == []
 
@@ -217,7 +217,7 @@ class TestLexicalSearch:
             return Result()
 
         monkeypatch.setattr("indexer.query.subprocess.run", mock_run)
-        monkeypatch.setattr("indexer.query.shutil.which", lambda x: "/usr/bin/rg")
+        monkeypatch.setattr("indexer.query.find_rg", lambda: "/usr/bin/rg")
 
         results = lexical_search("parse_file", populated_db, str(tmp_path), top_k=10)
         assert len(results) > 0
@@ -240,7 +240,7 @@ class TestFallbackRouting:
             return Result()
 
         monkeypatch.setattr("indexer.query.subprocess.run", mock_run)
-        monkeypatch.setattr("indexer.query.shutil.which", lambda x: "/usr/bin/rg")
+        monkeypatch.setattr("indexer.query.find_rg", lambda: "/usr/bin/rg")
 
         # lexical returns empty
         lex = lexical_search("parsing", populated_db, "/tmp", top_k=10)

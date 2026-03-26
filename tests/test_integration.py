@@ -4,6 +4,7 @@ Verifies end-to-end flows spanning init, build, enrich, query, status,
 and reset commands working together.
 """
 
+import fcntl
 import json
 import os
 import shutil
@@ -324,21 +325,22 @@ class TestExitCodeConsistency:
 
 
 class TestBuildLockPrevents:
-    """A fresh lock file blocks a second build."""
+    """An active flock blocks a second build."""
 
     def test_concurrent_build_blocked(self, repo):
-        # Create a fresh lock
         db_dir = repo / ".codeindex"
         db_dir.mkdir(exist_ok=True)
         lock = db_dir / "build.lock"
-        lock.write_text(json.dumps({
-            "pid": 99999,
-            "started": datetime.now(timezone.utc).isoformat(),
-        }))
-
-        r = _run_cmd("build", cwd=str(repo))
-        assert r.returncode == 2
-        assert "Another build is running" in r.stderr
+        # Hold an actual flock to simulate a concurrent build
+        fd = open(lock, "w")
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            r = _run_cmd("build", cwd=str(repo))
+            assert r.returncode == 2
+            assert "Another build is running" in r.stderr
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            fd.close()
 
 
 # ── (9) Gitignore managed across init and build ──────────────────────

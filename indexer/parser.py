@@ -3,23 +3,26 @@
 import ast
 import hashlib
 import os
+import sqlite3
 import sys
 from datetime import datetime, timezone
-from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
 import click
+import pathspec
 import tree_sitter_java as tsjava
 import tree_sitter_kotlin as tskotlin
 import tree_sitter_ruby as tsruby
 import tree_sitter_typescript as tstypescript
 from tree_sitter import Language, Parser as TSParser
 
+__all__ = ["parse_file", "parse_directory"]
 
-def _estimate_tokens(text: str) -> float:
-    """Estimate token count: len(split()) * 1.3."""
-    return len(text.split()) * 1.3
+
+def _estimate_tokens(text: str) -> int:
+    """Estimate token count: ~4 characters per token."""
+    return max(1, len(text) // 4)
 
 
 def _sha256(text: str) -> str:
@@ -35,17 +38,30 @@ def _get_source_segment(source_lines: list[str], start_line: int, end_line: int)
 def _get_signature(node: ast.AST) -> str | None:
     """Extract function/method signature from AST node."""
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-        args = ast.dump(node.args)
-        # Build a readable signature
         parts = []
-        for arg in node.args.args:
-            ann = ""
-            if arg.annotation:
-                ann = f": {ast.unparse(arg.annotation)}"
+        # Positional-only parameters (before /)
+        for arg in node.args.posonlyargs:
+            ann = f": {ast.unparse(arg.annotation)}" if arg.annotation else ""
             parts.append(f"{arg.arg}{ann}")
-        returns = ""
-        if node.returns:
-            returns = f" -> {ast.unparse(node.returns)}"
+        if node.args.posonlyargs:
+            parts.append("/")
+        # Regular parameters
+        for arg in node.args.args:
+            ann = f": {ast.unparse(arg.annotation)}" if arg.annotation else ""
+            parts.append(f"{arg.arg}{ann}")
+        # *args or bare * separator
+        if node.args.vararg:
+            parts.append(f"*{node.args.vararg.arg}")
+        elif node.args.kwonlyargs:
+            parts.append("*")
+        # Keyword-only parameters
+        for arg in node.args.kwonlyargs:
+            ann = f": {ast.unparse(arg.annotation)}" if arg.annotation else ""
+            parts.append(f"{arg.arg}{ann}")
+        # **kwargs
+        if node.args.kwarg:
+            parts.append(f"**{node.args.kwarg.arg}")
+        returns = f" -> {ast.unparse(node.returns)}" if node.returns else ""
         return f"({', '.join(parts)}){returns}"
     return None
 
@@ -57,44 +73,32 @@ def _get_docstring(node: ast.AST) -> str | None:
     return None
 
 
-def _load_gitignore_patterns(repo_root: Path) -> list[str]:
-    """Load .gitignore patterns from repo root."""
+def _load_gitignore_patterns(
+    repo_root: Path,
+    extra_patterns: list[str] | None = None,
+) -> pathspec.PathSpec:
+    """Load .gitignore patterns from repo root and return a PathSpec matcher."""
+    lines: list[str] = []
     gitignore = repo_root / ".gitignore"
-    patterns = []
     if gitignore.exists():
-        for line in gitignore.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#"):
-                patterns.append(line)
-    return patterns
+        for raw_line in gitignore.read_text().splitlines():
+            stripped = raw_line.strip()
+            if stripped and not stripped.startswith("#"):
+                lines.append(stripped)
+    if extra_patterns:
+        lines.extend(extra_patterns)
+    return pathspec.PathSpec.from_lines("gitwildmatch", lines)
 
 
-def _is_ignored(file_path: Path, repo_root: Path, gitignore_patterns: list[str]) -> bool:
+def _is_ignored(file_path: Path, repo_root: Path, spec: pathspec.PathSpec) -> bool:
     """Check if a file should be ignored based on .gitignore patterns and built-in rules."""
     rel = file_path.relative_to(repo_root)
-    rel_str = str(rel)
-    rel_posix = rel.as_posix()
 
     # Always exclude .codeindex/*.db
     if ".codeindex" in rel.parts:
         return True
 
-    for pattern in gitignore_patterns:
-        # Directory pattern (ends with /)
-        if pattern.endswith("/"):
-            dir_name = pattern.rstrip("/")
-            if dir_name in rel.parts:
-                return True
-        else:
-            # File pattern
-            if fnmatch(rel_posix, pattern) or fnmatch(file_path.name, pattern):
-                return True
-            # Also check each path component for directory matches
-            for part in rel.parts:
-                if fnmatch(part, pattern):
-                    return True
-
-    return False
+    return spec.match_file(rel.as_posix())
 
 
 def _file_content_hash(file_path: Path) -> str:
@@ -205,7 +209,7 @@ def _ts_get_name(node) -> str | None:
             return child.text.decode("utf8")
     # For Kotlin/TS, the identifier child is usually the name
     for child in node.children:
-        if child.type in ("identifier", "type_identifier", "property_identifier"):
+        if child.type in ("identifier", "type_identifier", "property_identifier", "simple_identifier"):
             return child.text.decode("utf8")
     return None
 
@@ -1168,9 +1172,10 @@ def chunk_node(
 
 def parse_file(
     path: Path,
-    conn: Any,
+    conn: sqlite3.Connection,
     repo_root: Path,
     token_limit: int = 512,
+    source: str | None = None,
 ) -> list[dict[str, Any]]:
     """Parse a source file and extract nodes.
 
@@ -1188,7 +1193,12 @@ def parse_file(
     if language is None:
         return []
 
-    source = path.read_text(encoding="utf-8")
+    if source is None:
+        try:
+            source = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            click.echo(f"[WARNING] Skipping non-UTF-8 file: {path}", err=True)
+            return []
 
     if language == "kotlin":
         return _parse_kotlin_file(path, repo_root, source, token_limit)
@@ -1301,20 +1311,23 @@ def parse_file(
 
 def parse_directory(
     repo_root: Path,
-    conn: Any,
+    conn: sqlite3.Connection,
     token_limit: int = 512,
     exclude_patterns: list[str] | None = None,
-) -> list[str]:
-    """Walk directory, detect language, parse .py files. Returns list of warnings.
+) -> tuple[list[str], set[str]]:
+    """Walk directory, detect language, parse .py files.
+
+    Returns a tuple of (warnings, changed_files) where:
+    - warnings: list of warning messages for files that could not be parsed
+    - changed_files: set of relative file paths that were re-parsed or deleted
 
     Implements incremental detection: skips files whose content_hash hasn't changed.
     When upserting nodes with changed content_hash, clears enriched_at to NULL.
     """
     repo_root = Path(repo_root)
     warnings: list[str] = []
-    gitignore_patterns = _load_gitignore_patterns(repo_root)
-    if exclude_patterns:
-        gitignore_patterns.extend(exclude_patterns)
+    changed_files: set[str] = set()
+    gitignore_spec = _load_gitignore_patterns(repo_root, extra_patterns=exclude_patterns)
 
     # Collect candidate files first for progress reporting
     candidate_files: list[tuple[Path, str]] = []
@@ -1322,19 +1335,23 @@ def parse_directory(
         dirnames[:] = [
             d for d in dirnames
             if not d.startswith(".") and d != "__pycache__"
+            and not (Path(dirpath) / d).is_symlink()
         ]
         for filename in filenames:
             file_path = Path(dirpath) / filename
+            if file_path.is_symlink():
+                continue
             language = detect_language(file_path)
             if language is None:
                 continue
-            if _is_ignored(file_path, repo_root, gitignore_patterns):
+            if _is_ignored(file_path, repo_root, gitignore_spec):
                 continue
             candidate_files.append((file_path, language))
 
     total_files = len(candidate_files)
     processed = 0
     skipped_unchanged = 0
+    batch_count = 0
 
     for file_path, language in candidate_files:
         rel_path = file_path.relative_to(repo_root).as_posix()
@@ -1352,10 +1369,18 @@ def parse_directory(
             skipped_unchanged += 1
             continue
 
+        # Decode once for reuse in parse_file (avoid double read)
+        try:
+            source = file_content.decode("utf-8")
+        except UnicodeDecodeError:
+            click.echo(f"[WARNING] Skipping non-UTF-8 file: {file_path}", err=True)
+            continue
+
         processed += 1
+        changed_files.add(rel_path)
 
         # Parse the file
-        nodes = parse_file(file_path, conn, repo_root, token_limit=token_limit)
+        nodes = parse_file(file_path, conn, repo_root, token_limit=token_limit, source=source)
 
         if not nodes:
             warnings.append(f"Skipped: {rel_path}")
@@ -1400,9 +1425,26 @@ def parse_directory(
             (rel_path, last_modified, file_hash, language, len(nodes), now),
         )
 
+        batch_count += 1
+        if batch_count % 50 == 0:
+            conn.commit()
+
+    if batch_count > 0:
+        conn.commit()
+
+    # Deletion detection: remove files from DB that no longer exist on disk
+    found_on_disk = {fp.relative_to(repo_root).as_posix() for fp, _ in candidate_files}
+    db_paths = {r[0] for r in conn.execute("SELECT path FROM files").fetchall()}
+    stale_paths = db_paths - found_on_disk
+    for stale in stale_paths:
+        conn.execute("DELETE FROM nodes WHERE file_path = ?", (stale,))
+        conn.execute("DELETE FROM files WHERE path = ?", (stale,))
+        click.echo(f"[PHASE 1] Removed deleted file: {stale}", err=True)
+        changed_files.add(stale)
+    if stale_paths:
         conn.commit()
 
     if skipped_unchanged:
         click.echo(f"[PHASE 1] Skipped {skipped_unchanged} unchanged files", err=True)
 
-    return warnings
+    return warnings, changed_files

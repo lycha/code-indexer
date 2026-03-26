@@ -4,6 +4,7 @@ import json
 import logging
 import math
 import os
+import sqlite3
 import sys
 import time
 from datetime import datetime, timezone
@@ -11,6 +12,8 @@ from datetime import datetime, timezone
 import anthropic
 import click
 import openai
+
+__all__ = ["enrich_nodes", "call_llm", "parse_enrichment_response", "build_node_context"]
 
 logger = logging.getLogger(__name__)
 
@@ -62,14 +65,14 @@ Respond in JSON only:
 }}"""
 
 
-def _get_unenriched_nodes(conn):
+def _get_unenriched_nodes(conn: sqlite3.Connection):
     """Select nodes where enriched_at IS NULL."""
     return conn.execute(
         "SELECT id, file_path, node_type, name, qualified_name, signature, docstring, raw_source FROM nodes WHERE enriched_at IS NULL"
     ).fetchall()
 
 
-def build_node_context(node_id, conn):
+def build_node_context(node_id: str, conn: sqlite3.Connection):
     """Build context dict with parent, children, callers, callees from edges table."""
     # Parent: node that has an edge where this node is a child (target of 'calls' from parent isn't right)
     # Parent = source of edges where target is this node and edge_type is not 'calls'
@@ -246,7 +249,7 @@ def parse_enrichment_response(response):
         return None
 
 
-def _rebuild_fts(conn):
+def _rebuild_fts(conn: sqlite3.Connection):
     """Rebuild FTS5 index from nodes table."""
     conn.execute("INSERT INTO nodes_fts(nodes_fts) VALUES('rebuild')")
 
@@ -270,7 +273,7 @@ def _resolve_provider_and_model(provider, model):
     return provider, model
 
 
-def enrich_nodes(conn, model=None, dry_run=False, provider=None):
+def enrich_nodes(conn: sqlite3.Connection, model=None, dry_run=False, provider=None):
     """Enrich unenriched nodes with LLM-generated metadata.
 
     Returns exit code: 0 if all enriched, 1 if any remain.
@@ -302,9 +305,19 @@ def enrich_nodes(conn, model=None, dry_run=False, provider=None):
         return 0
 
     enriched_count = 0
+    _COMMIT_BATCH_SIZE = 50
     for node_idx, node_row in enumerate(nodes, 1):
         node_id = node_row[0]
+        node_type = node_row[2]
         qualified_name = node_row[4]
+
+        # Skip file-level nodes — their source is the entire file (can be 50K+
+        # tokens) which blows up context windows and costs.  File nodes get
+        # semantic metadata from their children's enrichment.
+        if node_type == "file":
+            click.echo(f"[ENRICH] Skipping file-level node: {qualified_name}", err=True)
+            continue
+
         click.echo(f"[ENRICH] Processing node {node_idx}/{count}: {qualified_name}", err=True)
         try:
             context = build_node_context(node_id, conn)
@@ -321,11 +334,18 @@ def enrich_nodes(conn, model=None, dry_run=False, provider=None):
                 "UPDATE nodes SET semantic_summary = ?, domain_tags = ?, inferred_responsibility = ?, enriched_at = ?, enrichment_model = ? WHERE id = ?",
                 (parsed["semantic_summary"], parsed["domain_tags"], parsed["inferred_responsibility"], now, model, node_id),
             )
-            conn.commit()
             enriched_count += 1
-        except Exception as e:
-            click.echo(f"[WARNING] Failed to enrich node {qualified_name}: {e}", err=True)
+            if enriched_count % _COMMIT_BATCH_SIZE == 0:
+                conn.commit()
+            # Pace requests to avoid triggering API rate limits (429s)
+            time.sleep(0.5)
+        except (anthropic.APIError, openai.APIError, json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+            click.echo(f"[WARNING] Failed to enrich node {qualified_name}: {type(e).__name__}: {e}", err=True)
             continue
+
+    # Final commit for any remaining uncommitted enrichments
+    if enriched_count % _COMMIT_BATCH_SIZE != 0:
+        conn.commit()
 
     # Rebuild FTS5 after all enrichments
     if enriched_count > 0:
@@ -341,7 +361,7 @@ def enrich_nodes(conn, model=None, dry_run=False, provider=None):
     return 0
 
 
-def _update_meta(conn):
+def _update_meta(conn: sqlite3.Connection):
     """Update index_meta.unenriched_nodes count."""
     remaining = conn.execute("SELECT COUNT(*) FROM nodes WHERE enriched_at IS NULL").fetchone()[0]
     conn.execute(

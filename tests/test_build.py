@@ -1,5 +1,6 @@
 """Integration tests for the index build command."""
 
+import fcntl
 import json
 import os
 import shutil
@@ -77,7 +78,7 @@ class TestBuildLockFile:
         assert not lock_path.exists()
 
     def test_stale_lock_removed(self, fixture_repo):
-        """Stale lock (>10 min old) is removed with warning."""
+        """Leftover lock file (no active flock) does not block a new build."""
         db_dir = fixture_repo / ".codeindex"
         db_dir.mkdir(exist_ok=True)
         lock_path = db_dir / "build.lock"
@@ -87,23 +88,26 @@ class TestBuildLockFile:
 
         result = _run_build(str(fixture_repo))
         assert result.returncode == 0
-        assert "[WARNING] Stale lock file removed" in result.stderr
         assert not lock_path.exists()
 
     def test_fresh_lock_blocks(self, fixture_repo):
-        """Fresh lock (<10 min) causes exit 2."""
+        """An active flock on the lock file causes exit 2."""
         db_dir = fixture_repo / ".codeindex"
         db_dir.mkdir(exist_ok=True)
         lock_path = db_dir / "build.lock"
-        now = datetime.now(timezone.utc).isoformat()
-        lock_path.write_text(json.dumps({"pid": 12345, "started": now}))
-
-        result = _run_build(str(fixture_repo))
-        assert result.returncode == 2
-        assert "[ERROR] Another build is running (PID: 12345)" in result.stderr
+        # Hold an actual flock to simulate a concurrent build
+        lock_fd = open(lock_path, "w")
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = _run_build(str(fixture_repo))
+            assert result.returncode == 2
+            assert "[ERROR] Another build is running" in result.stderr
+        finally:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            lock_fd.close()
 
     def test_naive_stale_lock_removed(self, fixture_repo):
-        """VAL-BUILD-011: Naive (no tz) stale lock timestamp is handled correctly."""
+        """VAL-BUILD-011: Leftover lock file with naive timestamp does not block build."""
         db_dir = fixture_repo / ".codeindex"
         db_dir.mkdir(exist_ok=True)
         lock_path = db_dir / "build.lock"
@@ -113,20 +117,23 @@ class TestBuildLockFile:
 
         result = _run_build(str(fixture_repo))
         assert result.returncode == 0
-        assert "[WARNING] Stale lock file removed" in result.stderr
+        assert not lock_path.exists()
 
     def test_naive_fresh_lock_blocks(self, fixture_repo):
-        """VAL-BUILD-011: Naive (no tz) fresh lock timestamp is handled correctly."""
+        """VAL-BUILD-011: An active flock blocks build regardless of timestamp format."""
         db_dir = fixture_repo / ".codeindex"
         db_dir.mkdir(exist_ok=True)
         lock_path = db_dir / "build.lock"
-        # Use current UTC time but without timezone info (naive)
-        now_naive = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-        lock_path.write_text(json.dumps({"pid": 12345, "started": now_naive}))
-
-        result = _run_build(str(fixture_repo))
-        assert result.returncode == 2
-        assert "[ERROR] Another build is running (PID: 12345)" in result.stderr
+        # Hold an actual flock to simulate a concurrent build
+        lock_fd = open(lock_path, "w")
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = _run_build(str(fixture_repo))
+            assert result.returncode == 2
+            assert "[ERROR] Another build is running" in result.stderr
+        finally:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            lock_fd.close()
 
 
 class TestBuildPhases:
