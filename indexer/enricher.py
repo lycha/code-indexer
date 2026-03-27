@@ -39,6 +39,17 @@ _PROVIDER_BASE_URLS = {
     "openrouter": "https://openrouter.ai/api/v1",
 }
 
+
+def _sanitize_error(e: Exception) -> str:
+    """Redact API keys from exception messages to prevent accidental leakage."""
+    err_msg = str(e)
+    for env_var in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "LITELLM_API_KEY"):
+        key_val = os.environ.get(env_var, "")
+        if key_val and key_val in err_msg:
+            err_msg = err_msg.replace(key_val, "***")
+    return err_msg
+
+
 ENRICHMENT_PROMPT_TEMPLATE = """\
 You are a code documentation assistant. Given the following code node and its
 immediate context, provide structured metadata.
@@ -212,7 +223,7 @@ def call_llm(prompt, model, provider=None):
         except _retryable_exceptions(provider) as e:
             if attempt < max_attempts - 1:
                 wait = 2 ** attempt
-                click.echo(f"[WARNING] API error (attempt {attempt + 1}/{max_attempts}): {e}. Retrying in {wait}s...", err=True)
+                click.echo(f"[WARNING] API error (attempt {attempt + 1}/{max_attempts}): {_sanitize_error(e)}. Retrying in {wait}s...", err=True)
                 time.sleep(wait)
             else:
                 raise
@@ -340,7 +351,7 @@ def enrich_nodes(conn: sqlite3.Connection, model=None, dry_run=False, provider=N
             # Pace requests to avoid triggering API rate limits (429s)
             time.sleep(0.5)
         except (anthropic.APIError, openai.APIError, json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
-            click.echo(f"[WARNING] Failed to enrich node {qualified_name}: {type(e).__name__}: {e}", err=True)
+            click.echo(f"[WARNING] Failed to enrich node {qualified_name}: {type(e).__name__}: {_sanitize_error(e)}", err=True)
             continue
 
     # Final commit for any remaining uncommitted enrichments

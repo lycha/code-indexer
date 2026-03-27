@@ -128,6 +128,8 @@ _UNSUPPORTED_EXTENSIONS: dict[str, str] = {
     ".swift": "swift",
 }
 
+_MAX_FILE_SIZE = 2 * 1024 * 1024  # 2 MB
+
 
 def detect_language(path: Path) -> str | None:
     """Detect language from file extension.
@@ -1195,6 +1197,13 @@ def parse_file(
 
     if source is None:
         try:
+            file_size = path.stat().st_size
+        except OSError:
+            return []
+        if file_size > _MAX_FILE_SIZE:
+            click.echo(f"[WARNING] Skipping oversized file ({file_size // 1024}KB): {path}", err=True)
+            return []
+        try:
             source = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             click.echo(f"[WARNING] Skipping non-UTF-8 file: {path}", err=True)
@@ -1355,6 +1364,16 @@ def parse_directory(
 
     for file_path, language in candidate_files:
         rel_path = file_path.relative_to(repo_root).as_posix()
+
+        # File size guard: skip oversized files to prevent OOM
+        try:
+            file_size = file_path.stat().st_size
+        except OSError:
+            continue
+        if file_size > _MAX_FILE_SIZE:
+            click.echo(f"[WARNING] Skipping oversized file ({file_size // 1024}KB): {rel_path}", err=True)
+            warnings.append(f"Skipped oversized file: {rel_path}")
+            continue
 
         # Incremental detection: check file content hash
         file_content = file_path.read_bytes()
