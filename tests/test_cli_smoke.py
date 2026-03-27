@@ -55,11 +55,13 @@ def test_help_lists_all_subcommands():
 
 
 def test_enrich_missing_api_key():
-    """index enrich without ANTHROPIC_API_KEY exits 2."""
-    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    """index enrich without any API key or base URL exits 2."""
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY",
+                        "LITELLM_API_KEY", "LITELLM_BASE_URL")}
     result = subprocess.run(["index", "enrich"], capture_output=True, text=True, env=env)
     assert result.returncode == 2
-    assert "ANTHROPIC_API_KEY" in result.stderr
+    assert "not set" in result.stderr.lower()
 
 
 def test_query_no_input_exits_2():

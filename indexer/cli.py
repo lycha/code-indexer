@@ -259,11 +259,11 @@ def build(ctx: click.Context, phase: str | None, token_limit: int, exclude: tupl
 @click.option("--dry-run", is_flag=True, default=False, help="Show what would be enriched without making API calls.")
 @click.option("--model", type=str, default=None, help="Override the LLM model for enrichment.")
 @click.option("--provider", type=click.Choice(["anthropic", "openai", "openrouter", "litellm"]), default=None, help="LLM provider (auto-detected from env vars if omitted).")
-@click.option("--concurrency", type=int, default=5, help="Number of concurrent LLM calls (default: 5).")
+@click.option("--concurrency", type=int, default=10, help="Number of concurrent LLM calls (default: 10).")
 @click.pass_context
 def enrich(ctx: click.Context, dry_run: bool, model: str | None, provider: str | None, concurrency: int) -> None:
     """Enrich code nodes with LLM-generated semantic metadata."""
-    from indexer.enricher import enrich_directories, enrich_nodes
+    from indexer.enricher import enrich_directories, enrich_files, enrich_nodes
 
     db_path = resolve_db_path(ctx.obj.get("db_path"))
     bootstrap(db_path)
@@ -275,6 +275,13 @@ def enrich(ctx: click.Context, dry_run: bool, model: str | None, provider: str |
         click.echo(f"[PHASE 3] Done in {elapsed:.1f}s", err=True)
 
         if not dry_run:
+            # Phase 3a: File-level summaries
+            click.echo("[PHASE 3a] Generating file-level summaries...", err=True)
+            t_files = time.monotonic()
+            enrich_files(conn, model=model, provider=provider, concurrency=concurrency)
+            elapsed_files = time.monotonic() - t_files
+            click.echo(f"[PHASE 3a] Done in {elapsed_files:.1f}s", err=True)
+
             # Phase 3b: Directory and project summaries
             click.echo("[PHASE 3b] Generating directory and project summaries...", err=True)
             t1 = time.monotonic()
@@ -289,17 +296,22 @@ def enrich(ctx: click.Context, dry_run: bool, model: str | None, provider: str |
 
 @cli.command()
 @click.argument("query_text", default="")
-@click.option("--type", "query_type", type=click.Choice(["lexical", "graph", "semantic"]), default=None, help="Query type.")
+@click.option("--type", "query_type", type=click.Choice(["lexical", "graph", "semantic", "hierarchical", "hierarchical-llm"]), default=None, help="Query type.")
 @click.option("--format", "output_format", type=click.Choice(["text", "json", "jsonl"]), default=None, help="Output format.")
 @click.option("--with-source", is_flag=True, default=False, help="Include raw source in results.")
 @click.option("--top-k", type=int, default=10, help="Maximum number of results.")
 @click.option("--depth", type=int, default=2, help="Graph traversal depth.")
+@click.option("--model", type=str, default=None, help="LLM model (for hierarchical-llm query type).")
+@click.option("--provider", type=click.Choice(["anthropic", "openai", "openrouter", "litellm"]), default=None, help="LLM provider (for hierarchical-llm query type).")
 @click.pass_context
-def query(ctx: click.Context, query_text: str, query_type: str | None, output_format: str | None, with_source: bool, top_k: int, depth: int) -> None:
+def query(ctx: click.Context, query_text: str, query_type: str | None, output_format: str | None, with_source: bool, top_k: int, depth: int, model: str | None, provider: str | None) -> None:
     """Query the code index."""
     from indexer.query import (
+        _looks_like_identifier,
         format_results,
         graph_search,
+        hierarchical_search,
+        hybrid_search,
         lexical_search,
         route_query,
         semantic_search,
@@ -365,14 +377,44 @@ def query(ctx: click.Context, query_text: str, query_type: str | None, output_fo
             results = semantic_search(
                 query=query_text, conn=conn, top_k=top_k, with_source=with_source,
             )
-            # Fallback: semantic → lexical
+            # Fallback: semantic → lexical (per identifier-like token)
             if not results:
                 click.echo("[QUERY] Semantic returned empty, falling back to lexical.", err=True)
                 repo_root = str(Path.cwd())
-                results = lexical_search(
-                    identifier=query_text, conn=conn, repo_root=repo_root,
-                    top_k=top_k, with_source=with_source,
-                )
+                tokens = query_text.split()
+                ident_tokens = [t for t in tokens if _looks_like_identifier(t)]
+                if not ident_tokens:
+                    ident_tokens = tokens  # fall back to all tokens if none look like identifiers
+                fallback_results: list = []
+                seen_ids: set[str] = set()
+                for token in ident_tokens:
+                    lex = lexical_search(
+                        identifier=token, conn=conn, repo_root=repo_root,
+                        top_k=top_k, with_source=with_source,
+                    )
+                    for nr in lex:
+                        if nr.id not in seen_ids:
+                            fallback_results.append(nr)
+                            seen_ids.add(nr.id)
+                results = fallback_results[:top_k]
+        elif strategy == "hybrid":
+            repo_root = str(Path.cwd())
+            results = hybrid_search(
+                query=query_text, conn=conn, repo_root=repo_root,
+                top_k=top_k, with_source=with_source,
+            )
+        elif strategy == "hierarchical":
+            results = hierarchical_search(
+                query=query_text, conn=conn,
+                top_k=top_k, with_source=with_source,
+            )
+        elif strategy == "hierarchical-llm":
+            from indexer.query import hierarchical_search_llm
+            results = hierarchical_search_llm(
+                query=query_text, conn=conn,
+                top_k=top_k, with_source=with_source,
+                model=model, provider=provider,
+            )
 
         output = format_results(results, output_format)
         if output:

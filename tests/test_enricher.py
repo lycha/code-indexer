@@ -174,7 +174,7 @@ class TestCallLlm:
         mock_msg.content = [MagicMock(text="response")]
         mock_client.messages.create.return_value = mock_msg
 
-        result = call_llm("test prompt", "claude-sonnet-4-6")
+        result = call_llm("test prompt", "claude-sonnet-4-6", provider="anthropic")
         assert result == "response"
         mock_client.messages.create.assert_called_once()
 
@@ -193,7 +193,7 @@ class TestCallLlm:
             mock_msg,
         ]
 
-        result = call_llm("test prompt", "claude-sonnet-4-6")
+        result = call_llm("test prompt", "claude-sonnet-4-6", provider="anthropic")
         assert result == "response"
         assert mock_sleep.call_count == 1
 
@@ -208,7 +208,7 @@ class TestCallLlm:
         mock_client.messages.create.side_effect = mock_anthropic.RateLimitError("rate limited")
 
         with pytest.raises(Exception, match="rate limited"):
-            call_llm("test prompt", "claude-sonnet-4-6")
+            call_llm("test prompt", "claude-sonnet-4-6", provider="anthropic")
         assert mock_client.messages.create.call_count == 3
 
 
@@ -220,7 +220,7 @@ class TestEnrichNodes:
             _insert_node(db_conn, "test.py::function::foo")
             mock_llm.return_value = _make_llm_response()
 
-            exit_code = enrich_nodes(db_conn, model="claude-sonnet-4-6")
+            exit_code = enrich_nodes(db_conn, model="claude-sonnet-4-6", provider="anthropic")
             assert exit_code == 0
 
             row = db_conn.execute("SELECT semantic_summary, domain_tags, inferred_responsibility, enriched_at, enrichment_model FROM nodes WHERE id = ?",
@@ -238,7 +238,7 @@ class TestEnrichNodes:
         os.environ["ANTHROPIC_API_KEY"] = "test-key"
         try:
             _insert_node(db_conn, "test.py::function::foo", enriched_at="2024-01-01T00:00:00Z")
-            exit_code = enrich_nodes(db_conn, model="claude-sonnet-4-6")
+            exit_code = enrich_nodes(db_conn, model="claude-sonnet-4-6", provider="anthropic")
             assert exit_code == 0
             mock_llm.assert_not_called()
         finally:
@@ -261,7 +261,7 @@ class TestEnrichNodes:
             _insert_node(db_conn, "test.py::function::foo")
             mock_llm.return_value = "not valid json"
 
-            exit_code = enrich_nodes(db_conn, model="claude-sonnet-4-6")
+            exit_code = enrich_nodes(db_conn, model="claude-sonnet-4-6", provider="anthropic")
             assert exit_code == 1  # node remains unenriched
 
             row = db_conn.execute("SELECT enriched_at FROM nodes WHERE id = ?",
@@ -274,7 +274,7 @@ class TestEnrichNodes:
         os.environ.pop("ANTHROPIC_API_KEY", None)
         _insert_node(db_conn, "test.py::function::foo")
         with pytest.raises(SystemExit) as exc:
-            enrich_nodes(db_conn, model="claude-sonnet-4-6")
+            enrich_nodes(db_conn, model="claude-sonnet-4-6", provider="anthropic")
         assert exc.value.code == 2
 
     @patch("indexer.enricher.call_llm")
@@ -286,7 +286,7 @@ class TestEnrichNodes:
             # First node succeeds, second fails
             mock_llm.side_effect = [_make_llm_response(), "invalid json"]
 
-            exit_code = enrich_nodes(db_conn, model="claude-sonnet-4-6")
+            exit_code = enrich_nodes(db_conn, model="claude-sonnet-4-6", provider="anthropic")
             assert exit_code == 1
         finally:
             os.environ.pop("ANTHROPIC_API_KEY", None)
@@ -298,7 +298,7 @@ class TestEnrichNodes:
             _insert_node(db_conn, "test.py::function::foo")
             mock_llm.return_value = _make_llm_response(summary="Calculates incremented value")
 
-            enrich_nodes(db_conn, model="claude-sonnet-4-6")
+            enrich_nodes(db_conn, model="claude-sonnet-4-6", provider="anthropic")
 
             # Query FTS for the enriched content
             fts_rows = db_conn.execute(
@@ -315,7 +315,7 @@ class TestEnrichNodes:
             _insert_node(db_conn, "test.py::function::foo")
             mock_llm.return_value = _make_llm_response()
 
-            enrich_nodes(db_conn, model="claude-sonnet-4-6")
+            enrich_nodes(db_conn, model="claude-sonnet-4-6", provider="anthropic")
 
             row = db_conn.execute("SELECT value FROM index_meta WHERE key = 'unenriched_nodes'").fetchone()
             assert row is not None
@@ -330,7 +330,7 @@ class TestEnrichNodes:
             _insert_node(db_conn, "test.py::function::foo")
             mock_llm.return_value = _make_llm_response()
 
-            enrich_nodes(db_conn, model="claude-opus-4")
+            enrich_nodes(db_conn, model="claude-opus-4", provider="anthropic")
 
             row = db_conn.execute("SELECT enrichment_model FROM nodes WHERE id = ?",
                                   ("test.py::function::foo",)).fetchone()
@@ -355,7 +355,7 @@ class TestEnrichNodes:
             db_conn.commit()
 
             mock_llm.return_value = _make_llm_response()
-            enrich_nodes(db_conn, model="claude-sonnet-4-6")
+            enrich_nodes(db_conn, model="claude-sonnet-4-6", provider="anthropic")
 
             # Check that the prompt for MyClass.foo included context
             calls = mock_llm.call_args_list
@@ -384,10 +384,10 @@ class TestEnrichDryRunEstimate:
 
 
 class TestResolveProviderAndModel:
-    def test_defaults_to_anthropic(self):
+    def test_defaults_to_litellm(self):
         provider, model = _resolve_provider_and_model(None, None)
-        assert provider == "anthropic"
-        assert model == DEFAULT_MODELS["anthropic"]
+        assert provider == "litellm"
+        assert model == DEFAULT_MODELS["litellm"]
 
     def test_explicit_provider(self):
         provider, model = _resolve_provider_and_model("openai", None)
@@ -396,7 +396,7 @@ class TestResolveProviderAndModel:
 
     def test_explicit_model_defaults_provider(self):
         provider, model = _resolve_provider_and_model(None, "custom-model")
-        assert provider == "anthropic"
+        assert provider == "litellm"
         assert model == "custom-model"
 
     def test_auto_detect_openai(self):
@@ -447,7 +447,7 @@ class TestCallLlmProviders:
         mock_call.return_value = "response"
         result = call_llm("prompt", "claude-sonnet-4-6", provider="anthropic")
         assert result == "response"
-        mock_call.assert_called_once_with("prompt", "claude-sonnet-4-6")
+        mock_call.assert_called_once_with("prompt", "claude-sonnet-4-6", system_prompt=None)
 
     @patch("indexer.enricher._call_openai_compat")
     def test_openai_provider(self, mock_call):
@@ -456,7 +456,7 @@ class TestCallLlmProviders:
             mock_call.return_value = "response"
             result = call_llm("prompt", "gpt-4o", provider="openai")
             assert result == "response"
-            mock_call.assert_called_once_with("prompt", "gpt-4o", api_key="test-key", base_url=None)
+            mock_call.assert_called_once_with("prompt", "gpt-4o", api_key="test-key", base_url=None, system_prompt=None)
         finally:
             os.environ.pop("OPENAI_API_KEY", None)
 
@@ -470,6 +470,7 @@ class TestCallLlmProviders:
             mock_call.assert_called_once_with(
                 "prompt", "anthropic/claude-sonnet-4-6",
                 api_key="test-key", base_url="https://openrouter.ai/api/v1",
+                system_prompt=None,
             )
         finally:
             os.environ.pop("OPENROUTER_API_KEY", None)
@@ -485,6 +486,7 @@ class TestCallLlmProviders:
             mock_call.assert_called_once_with(
                 "prompt", "gpt-4o",
                 api_key="test-key", base_url="http://localhost:4000/v1",
+                system_prompt=None,
             )
         finally:
             os.environ.pop("LITELLM_API_KEY", None)
@@ -533,3 +535,54 @@ class TestEnrichWithProvider:
                 assert exit_code == 0
         finally:
             os.environ.pop("LITELLM_BASE_URL", None)
+
+
+class TestEnrichFiles:
+    @patch("indexer.enricher.call_llm")
+    def test_enriches_file_nodes(self, mock_llm, db_conn):
+        """File-level enrichment aggregates node summaries into file summary."""
+        os.environ["ANTHROPIC_API_KEY"] = "test-key"
+        try:
+            # Insert a file node and two child function nodes
+            _insert_node(db_conn, "test.py::file::test.py", node_type="file", name="test.py",
+                         qualified_name="test.py", file_path="test.py")
+            _insert_node(db_conn, "test.py::function::foo", node_type="function", name="foo",
+                         qualified_name="foo", file_path="test.py",
+                         enriched_at="2024-01-01T00:00:00Z")
+            # Set semantic_summary on the child node
+            db_conn.execute(
+                "UPDATE nodes SET semantic_summary = 'Does foo stuff' WHERE id = ?",
+                ("test.py::function::foo",))
+            db_conn.commit()
+
+            mock_llm.return_value = '{"summary": "Test file with foo function", "domain_tags": ["testing"], "responsibility": "Unit tests"}'
+
+            from indexer.enricher import enrich_files
+            enrich_files(db_conn, model="test-model", provider="anthropic")
+
+            row = db_conn.execute(
+                "SELECT semantic_summary, enriched_at FROM nodes WHERE id = ?",
+                ("test.py::file::test.py",)).fetchone()
+            assert row[0] == "Test file with foo function"
+            assert row[1] is not None
+        finally:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+
+    @patch("indexer.enricher.call_llm")
+    def test_skips_files_without_enriched_children(self, mock_llm, db_conn):
+        """File nodes with no enriched children are skipped."""
+        os.environ["ANTHROPIC_API_KEY"] = "test-key"
+        try:
+            _insert_node(db_conn, "empty.py::file::empty.py", node_type="file", name="empty.py",
+                         qualified_name="empty.py", file_path="empty.py")
+
+            from indexer.enricher import enrich_files
+            enrich_files(db_conn, model="test-model", provider="anthropic")
+
+            mock_llm.assert_not_called()
+            row = db_conn.execute(
+                "SELECT enriched_at FROM nodes WHERE id = ?",
+                ("empty.py::file::empty.py",)).fetchone()
+            assert row[0] is None
+        finally:
+            os.environ.pop("ANTHROPIC_API_KEY", None)

@@ -180,7 +180,7 @@ class TestEnrichmentInterruptionRecovery:
                 ),
             ]
 
-            exit_code1 = enrich_nodes(db_conn, model="claude-sonnet-4-6")
+            exit_code1 = enrich_nodes(db_conn, model="claude-sonnet-4-6", provider="anthropic")
             assert exit_code1 == 1  # some nodes remain unenriched
 
             enriched1 = db_conn.execute(
@@ -192,7 +192,7 @@ class TestEnrichmentInterruptionRecovery:
             mock_llm.reset_mock()
             mock_llm.side_effect = [_make_llm_response(summary="Summary C")]
 
-            exit_code2 = enrich_nodes(db_conn, model="claude-sonnet-4-6")
+            exit_code2 = enrich_nodes(db_conn, model="claude-sonnet-4-6", provider="anthropic")
             assert exit_code2 == 0  # all enriched now
 
             # call_llm should have been called exactly once (for the remaining node)
@@ -225,7 +225,7 @@ class TestEnrichmentInterruptionRecovery:
                     body=None,
                 ),
             ]
-            enrich_nodes(db_conn, model="claude-sonnet-4-6")
+            enrich_nodes(db_conn, model="claude-sonnet-4-6", provider="anthropic")
 
             enriched_after_first = db_conn.execute(
                 "SELECT COUNT(*) FROM nodes WHERE enriched_at IS NOT NULL"
@@ -235,7 +235,7 @@ class TestEnrichmentInterruptionRecovery:
             # Second run
             mock_llm.reset_mock()
             mock_llm.side_effect = [_make_llm_response()]
-            enrich_nodes(db_conn, model="claude-sonnet-4-6")
+            enrich_nodes(db_conn, model="claude-sonnet-4-6", provider="anthropic")
 
             enriched_after_second = db_conn.execute(
                 "SELECT COUNT(*) FROM nodes WHERE enriched_at IS NOT NULL"

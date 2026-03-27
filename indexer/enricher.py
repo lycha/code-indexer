@@ -10,23 +10,25 @@ import sys
 import time
 from datetime import datetime, timezone
 
+from pathlib import Path
+
 import anthropic
 import click
 import openai
 
-__all__ = ["enrich_nodes", "enrich_directories", "call_llm", "parse_enrichment_response", "build_node_context"]
+__all__ = ["enrich_nodes", "enrich_directories", "enrich_files", "call_llm", "parse_enrichment_response", "build_node_context"]
 
 logger = logging.getLogger(__name__)
 
 PROVIDERS = ("anthropic", "openai", "openrouter", "litellm")
 
-DEFAULT_PROVIDER = "anthropic"
+DEFAULT_PROVIDER = "litellm"
 
 DEFAULT_MODELS = {
     "anthropic": "claude-sonnet-4-6",
     "openai": "gpt-4o",
     "openrouter": "anthropic/claude-sonnet-4-6",
-    "litellm": "gpt-4o",
+    "litellm": "gemini-2.5-flash-lite",
 }
 
 _PROVIDER_ENV_KEYS = {
@@ -75,6 +77,24 @@ Respond in JSON only:
   "domain_tags": ["tag1", "tag2"],
   "inferred_responsibility": "Single sentence: what this code is responsible for in the broader system."
 }}"""
+
+FILE_SUMMARY_PROMPT = """Summarize this source file as a cohesive unit.
+
+File: {file_path}
+
+The file contains the following components:
+
+{node_summaries}
+
+Write a concise summary (2-4 sentences) covering:
+1. The file's primary purpose and responsibility
+2. Key classes, functions, or exports it provides
+3. Its imports and dependencies on other files/modules
+4. How it fits into the broader module/package
+
+Return ONLY a JSON object:
+{{"summary": "...", "domain_tags": ["tag1", "tag2"], "responsibility": "..."}}
+"""
 
 
 def _get_unenriched_nodes(conn: sqlite3.Connection):
@@ -167,18 +187,21 @@ def _build_prompt(node_row, context):
     )
 
 
-def _call_anthropic(prompt, model):
+def _call_anthropic(prompt, model, system_prompt=None):
     """Call Anthropic API. Returns response text."""
     client = anthropic.Anthropic()
-    message = client.messages.create(
+    kwargs = dict(
         model=model,
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
     )
+    if system_prompt:
+        kwargs["system"] = system_prompt
+    message = client.messages.create(**kwargs)
     return message.content[0].text
 
 
-def _call_openai_compat(prompt, model, api_key=None, base_url=None):
+def _call_openai_compat(prompt, model, api_key=None, base_url=None, system_prompt=None):
     """Call an OpenAI-compatible API. Works for OpenAI, OpenRouter, and LiteLLM."""
     kwargs = {}
     if api_key:
@@ -186,10 +209,14 @@ def _call_openai_compat(prompt, model, api_key=None, base_url=None):
     if base_url:
         kwargs["base_url"] = base_url
     client = openai.OpenAI(**kwargs)
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
     response = client.chat.completions.create(
         model=model,
         max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}],
+        messages=messages,
     )
     return response.choices[0].message.content
 
@@ -201,7 +228,7 @@ def _retryable_exceptions(provider):
     return (openai.RateLimitError, openai.APITimeoutError)
 
 
-def call_llm(prompt, model, provider=None):
+def call_llm(prompt, model, provider=None, system_prompt=None):
     """Call the configured LLM provider with the enrichment prompt. Returns the response text.
 
     Retries with exponential backoff on rate-limit/timeout errors.
@@ -213,14 +240,14 @@ def call_llm(prompt, model, provider=None):
     for attempt in range(max_attempts):
         try:
             if provider == "anthropic":
-                return _call_anthropic(prompt, model)
+                return _call_anthropic(prompt, model, system_prompt=system_prompt)
             else:
                 env_key = _PROVIDER_ENV_KEYS.get(provider, "OPENAI_API_KEY")
                 api_key = os.environ.get(env_key)
                 base_url = _PROVIDER_BASE_URLS.get(provider)
                 if provider == "litellm":
                     base_url = os.environ.get("LITELLM_BASE_URL", "http://localhost:4000/v1")
-                return _call_openai_compat(prompt, model, api_key=api_key, base_url=base_url)
+                return _call_openai_compat(prompt, model, api_key=api_key, base_url=base_url, system_prompt=system_prompt)
         except _retryable_exceptions(provider) as e:
             if attempt < max_attempts - 1:
                 wait = 2 ** attempt
@@ -266,7 +293,7 @@ def _rebuild_fts(conn: sqlite3.Connection):
     conn.execute("INSERT INTO nodes_fts(nodes_fts) VALUES('rebuild')")
 
 
-async def _enrich_node_async(semaphore, node_row, conn, model, provider):
+async def _enrich_node_async(semaphore, node_row, conn, model, provider, system_prompt=None):
     """Enrich a single node asynchronously using a thread for the sync LLM call."""
     async with semaphore:
         node_id = node_row[0]
@@ -279,17 +306,17 @@ async def _enrich_node_async(semaphore, node_row, conn, model, provider):
 
         context = build_node_context(node_id, conn)
         prompt = _build_prompt(node_row, context)
-        response = await asyncio.to_thread(call_llm, prompt, model, provider=provider)
+        response = await asyncio.to_thread(call_llm, prompt, model, provider=provider, system_prompt=system_prompt)
         return (node_id, qualified_name, response, "ok")
 
 
-async def _enrich_batch_async(nodes, conn, model, provider, concurrency=5):
+async def _enrich_batch_async(nodes, conn, model, provider, concurrency=5, system_prompt=None):
     """Enrich nodes concurrently with a semaphore limiting concurrency."""
     semaphore = asyncio.Semaphore(concurrency)
 
     async def _safe_enrich(node_row, idx):
         try:
-            return await _enrich_node_async(semaphore, node_row, conn, model, provider)
+            return await _enrich_node_async(semaphore, node_row, conn, model, provider, system_prompt=system_prompt)
         except Exception as e:
             node_id = node_row[0]
             qualified_name = node_row[4]
@@ -318,7 +345,61 @@ def _resolve_provider_and_model(provider, model):
     return provider, model
 
 
-def enrich_nodes(conn: sqlite3.Connection, model=None, dry_run=False, provider=None, concurrency: int = 5):
+def _build_system_prompt(conn: sqlite3.Connection):
+    """Build a project-context system prompt from README, project summary, and directory tree.
+
+    Returns the system prompt string, or None if no project context is available.
+    """
+    parts = ["You are a code documentation assistant with deep knowledge of this project."]
+
+    # Determine repo root from database file path
+    try:
+        db_path = conn.execute("PRAGMA database_list").fetchone()[2]
+    except (TypeError, IndexError):
+        db_path = None
+
+    if db_path:
+        repo_root = Path(db_path).parent.parent
+        for readme_name in ("README.md", "readme.md", "README.rst", "README.txt"):
+            readme_file = repo_root / readme_name
+            if readme_file.exists():
+                try:
+                    readme_content = readme_file.read_text(errors="replace")[:3000]
+                    parts.append(f"\n## README\n{readme_content}")
+                except OSError:
+                    pass
+                break
+
+    # Project summary from directory_summaries
+    try:
+        project_row = conn.execute(
+            "SELECT summary FROM directory_summaries WHERE dir_path = '.' LIMIT 1"
+        ).fetchone()
+        if project_row and project_row[0]:
+            parts.append(f"\n## Project Overview\n{project_row[0]}")
+    except sqlite3.OperationalError:
+        pass  # Table may not exist yet
+
+    # Directory tree from directory_summaries
+    try:
+        dir_rows = conn.execute(
+            "SELECT dir_path, summary FROM directory_summaries WHERE dir_path != '.' ORDER BY dir_path"
+        ).fetchall()
+        if dir_rows:
+            tree_lines = ["## Repository Structure"]
+            for dir_path, summary in dir_rows[:50]:  # Cap at 50 entries
+                short_summary = (summary[:100] + "...") if summary and len(summary) > 100 else (summary or "")
+                tree_lines.append(f"- {dir_path}/: {short_summary}")
+            parts.append("\n".join(tree_lines))
+    except sqlite3.OperationalError:
+        pass  # Table may not exist yet
+
+    if len(parts) > 1:
+        return "\n\n".join(parts)
+    return None
+
+
+def enrich_nodes(conn: sqlite3.Connection, model=None, dry_run=False, provider=None, concurrency: int = 10):
     """Enrich unenriched nodes with LLM-generated metadata.
 
     Uses asyncio with configurable concurrency to call the LLM in parallel.
@@ -352,10 +433,13 @@ def enrich_nodes(conn: sqlite3.Connection, model=None, dry_run=False, provider=N
         _update_meta(conn)
         return 0
 
+    # Build project context system prompt
+    system_prompt = _build_system_prompt(conn)
+
     # Run async LLM calls (DB reads for context happen in threads too, but
     # SQLite in WAL mode handles concurrent readers fine)
     click.echo(f"[ENRICH] Starting concurrent enrichment with concurrency={concurrency}...", err=True)
-    results = asyncio.run(_enrich_batch_async(nodes, conn, model, provider, concurrency=concurrency))
+    results = asyncio.run(_enrich_batch_async(nodes, conn, model, provider, concurrency=concurrency, system_prompt=system_prompt))
 
     # Process results synchronously (DB writes)
     enriched_count = 0
@@ -407,6 +491,112 @@ def enrich_nodes(conn: sqlite3.Connection, model=None, dry_run=False, provider=N
     if remaining > 0:
         return 1
     return 0
+
+
+async def _enrich_file_async(semaphore, file_row, conn, model, provider, system_prompt=None):
+    """Enrich a single file node asynchronously by aggregating its child node summaries."""
+    async with semaphore:
+        file_id, file_path, qualified_name = file_row
+
+        # Gather enriched child node summaries (cap at 50)
+        child_nodes = conn.execute(
+            "SELECT qualified_name, node_type, signature, semantic_summary, domain_tags, inferred_responsibility "
+            "FROM nodes WHERE file_path = ? AND node_type != 'file' AND enriched_at IS NOT NULL",
+            (file_path,),
+        ).fetchall()[:50]
+
+        if not child_nodes:
+            return (file_id, file_path, None, "skipped")
+
+        # Format node summaries into readable text
+        summary_parts = []
+        for qname, ntype, sig, summary, tags, responsibility in child_nodes:
+            parts = [f"- {ntype} {qname}"]
+            if sig:
+                parts[0] += f" ({sig})"
+            if summary:
+                parts.append(f"    Summary: {summary}")
+            if tags:
+                parts.append(f"    Tags: {tags}")
+            if responsibility:
+                parts.append(f"    Responsibility: {responsibility}")
+            summary_parts.append("\n".join(parts))
+
+        node_summaries_text = "\n".join(summary_parts)
+        prompt = FILE_SUMMARY_PROMPT.format(file_path=file_path, node_summaries=node_summaries_text)
+        response = await asyncio.to_thread(call_llm, prompt, model, provider=provider, system_prompt=system_prompt)
+        return (file_id, file_path, response, "ok")
+
+
+def enrich_files(conn, model=None, provider=None, concurrency=10):
+    """Generate file-level summaries by aggregating node summaries."""
+    provider, model = _resolve_provider_and_model(provider, model)
+
+    # Check API key
+    env_key = _PROVIDER_ENV_KEYS.get(provider, "OPENAI_API_KEY")
+    api_key = os.environ.get(env_key)
+    if not api_key and provider != "litellm":
+        click.echo(f"[ERROR] {env_key} not set.", err=True)
+        sys.exit(2)
+    if provider == "litellm" and not api_key and not os.environ.get("LITELLM_BASE_URL"):
+        click.echo("[ERROR] LITELLM_API_KEY or LITELLM_BASE_URL not set.", err=True)
+        sys.exit(2)
+
+    # Get unenriched file nodes
+    file_nodes = conn.execute(
+        "SELECT id, file_path, qualified_name FROM nodes WHERE node_type = 'file' AND enriched_at IS NULL"
+    ).fetchall()
+
+    click.echo(f"[FILE-ENRICH] {len(file_nodes)} file nodes to enrich (provider={provider}, model={model}).", err=True)
+
+    if not file_nodes:
+        return
+
+    # Build project context system prompt
+    system_prompt = _build_system_prompt(conn)
+
+    # Run async LLM calls
+    async def _enrich_all():
+        semaphore = asyncio.Semaphore(concurrency)
+        tasks = []
+        for file_row in file_nodes:
+            tasks.append(_enrich_file_async(semaphore, file_row, conn, model, provider, system_prompt=system_prompt))
+        return await asyncio.gather(*tasks, return_exceptions=True)
+
+    results = asyncio.run(_enrich_all())
+
+    # Process results synchronously (DB writes)
+    enriched_count = 0
+    for result in results:
+        if isinstance(result, Exception):
+            click.echo(f"[WARNING] File enrichment failed: {_sanitize_error(result)}", err=True)
+            continue
+
+        file_id, file_path, response, status = result
+
+        if status == "skipped":
+            click.echo(f"[FILE-ENRICH] Skipping {file_path} (no enriched child nodes).", err=True)
+            continue
+
+        parsed = _parse_dir_enrichment_response(response)
+        if parsed is None:
+            click.echo(f"[WARNING] Malformed JSON for file {file_path}, skipping.", err=True)
+            continue
+
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "UPDATE nodes SET semantic_summary = ?, domain_tags = ?, inferred_responsibility = ?, enriched_at = ?, enrichment_model = ? WHERE id = ?",
+            (parsed["summary"], parsed["domain_tags"], parsed["responsibility"], now, model, file_id),
+        )
+        enriched_count += 1
+        click.echo(f"[FILE-ENRICH] Enriched: {file_path}", err=True)
+
+    if enriched_count > 0:
+        conn.commit()
+        _rebuild_fts(conn)
+        conn.commit()
+
+    click.echo(f"[FILE-ENRICH] Enriched {enriched_count} file nodes.", err=True)
 
 
 DIRECTORY_SUMMARY_PROMPT = """\
@@ -481,27 +671,52 @@ def _needs_dir_enrichment(conn, dir_path):
 
 
 def _gather_dir_contents(conn, dir_path):
-    """Gather content descriptions for a directory's direct children."""
+    """Gather content descriptions for a directory's direct children.
+
+    Prefers file-level summaries when available; falls back to individual
+    node summaries for files that don't have a file-level summary.
+    """
     parts = []
 
-    # Direct child nodes (files in this exact directory, not subdirectories)
+    # 1. Get file-level summaries for files in this directory
+    if dir_path == ".":
+        file_summaries = conn.execute(
+            "SELECT file_path, semantic_summary, domain_tags FROM nodes "
+            "WHERE file_path NOT LIKE '%/%' AND node_type = 'file' AND enriched_at IS NOT NULL"
+        ).fetchall()
+    else:
+        pattern = dir_path + "/%"
+        file_summaries = conn.execute(
+            "SELECT file_path, semantic_summary, domain_tags FROM nodes "
+            "WHERE file_path LIKE ? AND file_path NOT LIKE ? AND node_type = 'file' AND enriched_at IS NOT NULL",
+            (pattern, dir_path + "/%/%"),
+        ).fetchall()
+
+    # Track which files have file-level summaries
+    files_with_summaries = set()
+    for fpath, summary, tags in file_summaries:
+        files_with_summaries.add(fpath)
+        parts.append(f"File: {fpath}\n  Summary: {summary or 'no summary'}\n  Tags: {tags or '[]'}")
+
+    # 2. Fall back to individual node summaries for files without file-level summaries
     if dir_path == ".":
         child_nodes = conn.execute(
-            "SELECT qualified_name, semantic_summary, domain_tags FROM nodes "
-            "WHERE file_path NOT LIKE '%/%' AND enriched_at IS NOT NULL"
+            "SELECT qualified_name, semantic_summary, domain_tags, file_path FROM nodes "
+            "WHERE file_path NOT LIKE '%/%' AND node_type != 'file' AND enriched_at IS NOT NULL"
         ).fetchall()
     else:
         pattern = dir_path + "/%"
         child_nodes = conn.execute(
-            "SELECT qualified_name, semantic_summary, domain_tags FROM nodes "
-            "WHERE file_path LIKE ? AND file_path NOT LIKE ? AND enriched_at IS NOT NULL",
+            "SELECT qualified_name, semantic_summary, domain_tags, file_path FROM nodes "
+            "WHERE file_path LIKE ? AND file_path NOT LIKE ? AND node_type != 'file' AND enriched_at IS NOT NULL",
             (pattern, dir_path + "/%/%"),
         ).fetchall()
 
-    for qname, summary, tags in child_nodes:
-        parts.append(f"- {qname}: {summary or 'no summary'} (tags: {tags or '[]'})")
+    for qname, summary, tags, fpath in child_nodes:
+        if fpath not in files_with_summaries:
+            parts.append(f"- {qname}: {summary or 'no summary'} (tags: {tags or '[]'})")
 
-    # Child directory summaries (already computed since we go bottom-up)
+    # 3. Child directory summaries (already computed since we go bottom-up)
     if dir_path == ".":
         # Top-level dirs: those with no / in dir_path (except '.' itself)
         child_dirs = conn.execute(
@@ -522,16 +737,16 @@ def _gather_dir_contents(conn, dir_path):
     return "\n".join(parts) if parts else "(empty directory)"
 
 
-async def _enrich_dir_async(semaphore, dir_path, conn, model, provider):
+async def _enrich_dir_async(semaphore, dir_path, conn, model, provider, system_prompt=None):
     """Enrich a single directory asynchronously."""
     async with semaphore:
         contents = _gather_dir_contents(conn, dir_path)
         prompt = DIRECTORY_SUMMARY_PROMPT.format(dir_path=dir_path, contents=contents)
-        response = await asyncio.to_thread(call_llm, prompt, model, provider=provider)
+        response = await asyncio.to_thread(call_llm, prompt, model, provider=provider, system_prompt=system_prompt)
         return (dir_path, response, contents, "ok")
 
 
-def enrich_directories(conn, model=None, provider=None, concurrency=5):
+def enrich_directories(conn, model=None, provider=None, concurrency=10):
     """Enrich directories with LLM-generated summaries, bottom-up.
 
     Generates summaries for each directory containing enriched nodes,
@@ -555,6 +770,9 @@ def enrich_directories(conn, model=None, provider=None, concurrency=5):
     except sqlite3.OperationalError:
         click.echo("[WARNING] directory_summaries table not found, skipping directory enrichment.", err=True)
         return
+
+    # Build project context system prompt
+    system_prompt = _build_system_prompt(conn)
 
     # Collect all unique directory paths from enriched nodes
     rows = conn.execute(
@@ -597,7 +815,7 @@ def enrich_directories(conn, model=None, provider=None, concurrency=5):
                 semaphore = asyncio.Semaphore(concurrency)
                 tasks = []
                 for d in group_dirs:
-                    tasks.append(_enrich_dir_async(semaphore, d, conn, model, provider))
+                    tasks.append(_enrich_dir_async(semaphore, d, conn, model, provider, system_prompt=system_prompt))
                 return await asyncio.gather(*tasks, return_exceptions=True)
 
             results = asyncio.run(_enrich_group(group))
@@ -635,7 +853,7 @@ def enrich_directories(conn, model=None, provider=None, concurrency=5):
         if contents != "(empty directory)":
             prompt = DIRECTORY_SUMMARY_PROMPT.format(dir_path=".", contents=contents)
             try:
-                response = call_llm(prompt, model, provider=provider)
+                response = call_llm(prompt, model, provider=provider, system_prompt=system_prompt)
                 parsed = _parse_dir_enrichment_response(response)
                 if parsed:
                     now = datetime.now(timezone.utc).isoformat()

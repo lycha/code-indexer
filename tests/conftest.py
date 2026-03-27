@@ -1,8 +1,18 @@
 """Shared test fixtures for the code indexer test suite."""
 
+import os
+
 import pytest
 
 from indexer.db import bootstrap, get_connection
+
+
+@pytest.fixture(autouse=True)
+def _isolate_litellm_env():
+    """Prevent LITELLM_BASE_URL from causing provider auto-detection in tests."""
+    saved = {k: os.environ.pop(k) for k in ("LITELLM_API_KEY", "LITELLM_BASE_URL") if k in os.environ}
+    yield
+    os.environ.update(saved)
 
 
 @pytest.fixture

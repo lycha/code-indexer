@@ -23,6 +23,10 @@ dependencies = [
 dev = [
     "pytest>=7.0",
 ]
+eval = [
+    "scipy>=1.10",
+    "numpy>=1.24",
+]
 
 [project.scripts]
 index = "indexer.cli:cli"
