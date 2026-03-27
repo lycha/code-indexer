@@ -259,19 +259,28 @@ def build(ctx: click.Context, phase: str | None, token_limit: int, exclude: tupl
 @click.option("--dry-run", is_flag=True, default=False, help="Show what would be enriched without making API calls.")
 @click.option("--model", type=str, default=None, help="Override the LLM model for enrichment.")
 @click.option("--provider", type=click.Choice(["anthropic", "openai", "openrouter", "litellm"]), default=None, help="LLM provider (auto-detected from env vars if omitted).")
+@click.option("--concurrency", type=int, default=5, help="Number of concurrent LLM calls (default: 5).")
 @click.pass_context
-def enrich(ctx: click.Context, dry_run: bool, model: str | None, provider: str | None) -> None:
+def enrich(ctx: click.Context, dry_run: bool, model: str | None, provider: str | None, concurrency: int) -> None:
     """Enrich code nodes with LLM-generated semantic metadata."""
-    from indexer.enricher import enrich_nodes
+    from indexer.enricher import enrich_directories, enrich_nodes
 
     db_path = resolve_db_path(ctx.obj.get("db_path"))
     bootstrap(db_path)
     conn = get_connection(db_path)
     try:
         t0 = time.monotonic()
-        exit_code = enrich_nodes(conn, model=model, dry_run=dry_run, provider=provider)
+        exit_code = enrich_nodes(conn, model=model, dry_run=dry_run, provider=provider, concurrency=concurrency)
         elapsed = time.monotonic() - t0
         click.echo(f"[PHASE 3] Done in {elapsed:.1f}s", err=True)
+
+        if not dry_run:
+            # Phase 3b: Directory and project summaries
+            click.echo("[PHASE 3b] Generating directory and project summaries...", err=True)
+            t1 = time.monotonic()
+            enrich_directories(conn, model=model, provider=provider, concurrency=concurrency)
+            elapsed_dirs = time.monotonic() - t1
+            click.echo(f"[PHASE 3b] Done in {elapsed_dirs:.1f}s", err=True)
     finally:
         conn.close()
     if exit_code:
@@ -462,7 +471,7 @@ def reset(ctx: click.Context, yes: bool) -> None:
     conn = get_connection(db_path)
     try:
         # Drop tables in reverse dependency order
-        for table in ["edges", "nodes_fts", "nodes", "files", "index_meta"]:
+        for table in ["edges", "nodes_fts", "dir_summaries_fts", "directory_summaries", "nodes", "files", "index_meta"]:
             conn.execute(f"DROP TABLE IF EXISTS {table}")
         conn.commit()
     finally:

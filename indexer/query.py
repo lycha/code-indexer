@@ -1,6 +1,7 @@
 """Query router: lexical, graph, and semantic search."""
 
 import json
+import math
 import re
 import sqlite3
 import subprocess
@@ -58,6 +59,18 @@ _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*([.][A-Za-z_][A-Za-z0-9_]*)
 _CAMEL_RE = re.compile(r"[a-z][A-Z]")
 _SNAKE_RE = re.compile(r"[a-z]_[a-z]")
 
+_COMMON_IDENTIFIERS = frozenset({
+    "get", "set", "put", "add", "run", "new", "map",
+    "self", "this", "init", "main", "data", "name",
+    "type", "value", "result", "error", "config",
+    "test", "setup", "args", "kwargs", "params",
+    "item", "items", "list", "dict", "key", "val",
+    "start", "stop", "close", "open", "read", "write",
+    "send", "save", "load", "update", "delete", "create",
+    "path", "file", "node", "model", "index", "count",
+    "size", "text", "line", "util", "utils", "helper",
+})
+
 
 def _looks_like_identifier(text: str) -> bool:
     """Return True if *text* looks like a code identifier (no spaces, camelCase/snake_case)."""
@@ -93,7 +106,15 @@ def lexical_search(
     top_k: int = 10,
     with_source: bool = False,
 ) -> list[NodeResult]:
-    """Ripgrep exact word match → node lookup → re-rank by specificity."""
+    """Ripgrep exact word match → node lookup → re-rank by specificity.
+
+    Ranking factors:
+    - Definition-site bonus: +10 if the node name exactly matches the identifier
+    - Specificity: 1 / total_match_count (fewer matches → higher weight)
+    - Hit count: each hit in a node contributes +0.5
+    - IDF weighting: log(total_files / (1 + matching_files)), capping at 0.1 minimum
+    - Common identifier penalty: ×0.5 for identifiers in _COMMON_IDENTIFIERS
+    """
     rg = find_rg()
     if rg is None:
         click.echo("[WARNING] ripgrep not found — lexical search unavailable", err=True)
@@ -174,6 +195,17 @@ def lexical_search(
 
     total_matches = len(matches)
 
+    # --- Frequency weighting (IDF) ---
+    matching_files = len({m[0] for m in matches})
+    total_files_row = conn.execute("SELECT COUNT(*) FROM files").fetchone()
+    total_files = total_files_row[0] if total_files_row and total_files_row[0] > 0 else 1
+    idf_weight = math.log(total_files / (1 + matching_files))
+    # Floor IDF at a small positive value so it never zeroes out scores
+    idf_weight = max(idf_weight, 0.1)
+
+    # Common identifier penalty
+    common_penalty = 0.5 if identifier.lower() in _COMMON_IDENTIFIERS else 1.0
+
     # 4. Build a lookup from rows we already fetched
     row_by_id: dict[str, tuple] = {row[0]: row for row in candidate_rows}
 
@@ -193,6 +225,8 @@ def lexical_search(
         score += 1.0 / max(total_matches, 1)
         # Hit count contribution
         score += count * 0.5
+        # Apply frequency weighting
+        score *= idf_weight * common_penalty
 
         tags = []
         if row[9]:
@@ -374,7 +408,41 @@ def semantic_search(
             semantic_summary=row[8], domain_tags=tags,
             raw_source=row[10] if with_source else None,
         ))
-    return results
+
+    # Also search directory summaries (table may not exist in older DBs)
+    try:
+        dir_rows = conn.execute(
+            "SELECT ds.dir_path, ds.summary, ds.domain_tags, ds.responsibility "
+            "FROM dir_summaries_fts f JOIN directory_summaries ds ON f.dir_path = ds.dir_path "
+            "WHERE dir_summaries_fts MATCH ? LIMIT ?",
+            (fts_query, top_k),
+        ).fetchall()
+    except Exception:
+        dir_rows = []
+
+    for row in dir_rows:
+        dir_path, summary, tags, responsibility = row
+        try:
+            tag_list = json.loads(tags) if tags else []
+        except (json.JSONDecodeError, TypeError):
+            tag_list = []
+        dir_result = NodeResult(
+            id=f"dir:{dir_path}",
+            file_path=dir_path,
+            node_type="directory",
+            qualified_name=dir_path,
+            signature=None,
+            docstring=None,
+            start_line=0,
+            end_line=0,
+            semantic_summary=summary,
+            domain_tags=tag_list,
+        )
+        if with_source:
+            dir_result.raw_source = responsibility or ""
+        results.append(dir_result)
+
+    return results[:top_k]
 
 
 # ---------------------------------------------------------------------------

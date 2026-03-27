@@ -1,5 +1,6 @@
 """Phase 3: LLM semantic enrichment."""
 
+import asyncio
 import json
 import logging
 import math
@@ -13,7 +14,7 @@ import anthropic
 import click
 import openai
 
-__all__ = ["enrich_nodes", "call_llm", "parse_enrichment_response", "build_node_context"]
+__all__ = ["enrich_nodes", "enrich_directories", "call_llm", "parse_enrichment_response", "build_node_context"]
 
 logger = logging.getLogger(__name__)
 
@@ -265,6 +266,39 @@ def _rebuild_fts(conn: sqlite3.Connection):
     conn.execute("INSERT INTO nodes_fts(nodes_fts) VALUES('rebuild')")
 
 
+async def _enrich_node_async(semaphore, node_row, conn, model, provider):
+    """Enrich a single node asynchronously using a thread for the sync LLM call."""
+    async with semaphore:
+        node_id = node_row[0]
+        node_type = node_row[2]
+        qualified_name = node_row[4]
+
+        # Skip file-level nodes
+        if node_type == "file":
+            return (node_id, qualified_name, None, "skipped")
+
+        context = build_node_context(node_id, conn)
+        prompt = _build_prompt(node_row, context)
+        response = await asyncio.to_thread(call_llm, prompt, model, provider=provider)
+        return (node_id, qualified_name, response, "ok")
+
+
+async def _enrich_batch_async(nodes, conn, model, provider, concurrency=5):
+    """Enrich nodes concurrently with a semaphore limiting concurrency."""
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def _safe_enrich(node_row, idx):
+        try:
+            return await _enrich_node_async(semaphore, node_row, conn, model, provider)
+        except Exception as e:
+            node_id = node_row[0]
+            qualified_name = node_row[4]
+            return (node_id, qualified_name, None, "error", e)
+
+    tasks = [_safe_enrich(row, i) for i, row in enumerate(nodes)]
+    return await asyncio.gather(*tasks)
+
+
 def _resolve_provider_and_model(provider, model):
     """Resolve provider and model defaults, auto-detecting provider from env if needed."""
     if provider is None:
@@ -284,8 +318,11 @@ def _resolve_provider_and_model(provider, model):
     return provider, model
 
 
-def enrich_nodes(conn: sqlite3.Connection, model=None, dry_run=False, provider=None):
+def enrich_nodes(conn: sqlite3.Connection, model=None, dry_run=False, provider=None, concurrency: int = 5):
     """Enrich unenriched nodes with LLM-generated metadata.
+
+    Uses asyncio with configurable concurrency to call the LLM in parallel.
+    SQLite operations remain synchronous.
 
     Returns exit code: 0 if all enriched, 1 if any remain.
     """
@@ -304,9 +341,9 @@ def enrich_nodes(conn: sqlite3.Connection, model=None, dry_run=False, provider=N
 
     nodes = _get_unenriched_nodes(conn)
     count = len(nodes)
-    estimated_minutes = math.ceil(count / 60) if count > 0 else 0
+    estimated_minutes = math.ceil(count / (60 * concurrency)) if count > 0 else 0
 
-    click.echo(f"{count} nodes to enrich (provider={provider}, model={model}). Estimated time: ~{estimated_minutes} minutes.", err=True)
+    click.echo(f"{count} nodes to enrich (provider={provider}, model={model}, concurrency={concurrency}). Estimated time: ~{estimated_minutes} minutes.", err=True)
 
     if dry_run:
         return 0
@@ -315,50 +352,50 @@ def enrich_nodes(conn: sqlite3.Connection, model=None, dry_run=False, provider=N
         _update_meta(conn)
         return 0
 
+    # Run async LLM calls (DB reads for context happen in threads too, but
+    # SQLite in WAL mode handles concurrent readers fine)
+    click.echo(f"[ENRICH] Starting concurrent enrichment with concurrency={concurrency}...", err=True)
+    results = asyncio.run(_enrich_batch_async(nodes, conn, model, provider, concurrency=concurrency))
+
+    # Process results synchronously (DB writes)
     enriched_count = 0
     _COMMIT_BATCH_SIZE = 50
-    for node_idx, node_row in enumerate(nodes, 1):
-        node_id = node_row[0]
-        node_type = node_row[2]
-        qualified_name = node_row[4]
+    for i, result in enumerate(results):
+        node_id = result[0]
+        qualified_name = result[1]
+        status = result[3] if len(result) > 3 else "ok"
 
-        # Skip file-level nodes — their source is the entire file (can be 50K+
-        # tokens) which blows up context windows and costs.  File nodes get
-        # semantic metadata from their children's enrichment.
-        if node_type == "file":
+        if status == "skipped":
             click.echo(f"[ENRICH] Skipping file-level node: {qualified_name}", err=True)
             continue
 
-        click.echo(f"[ENRICH] Processing node {node_idx}/{count}: {qualified_name}", err=True)
-        try:
-            context = build_node_context(node_id, conn)
-            prompt = _build_prompt(node_row, context)
-            response = call_llm(prompt, model, provider=provider)
-            parsed = parse_enrichment_response(response)
-
-            if parsed is None:
-                click.echo(f"[WARNING] Malformed JSON for node {qualified_name}, skipping.", err=True)
-                continue
-
-            now = datetime.now(timezone.utc).isoformat()
-            conn.execute(
-                "UPDATE nodes SET semantic_summary = ?, domain_tags = ?, inferred_responsibility = ?, enriched_at = ?, enrichment_model = ? WHERE id = ?",
-                (parsed["semantic_summary"], parsed["domain_tags"], parsed["inferred_responsibility"], now, model, node_id),
-            )
-            enriched_count += 1
-            if enriched_count % _COMMIT_BATCH_SIZE == 0:
-                conn.commit()
-            # Pace requests to avoid triggering API rate limits (429s)
-            time.sleep(0.5)
-        except (anthropic.APIError, openai.APIError, json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
-            click.echo(f"[WARNING] Failed to enrich node {qualified_name}: {type(e).__name__}: {_sanitize_error(e)}", err=True)
+        if status == "error":
+            err = result[4] if len(result) > 4 else "unknown error"
+            click.echo(f"[WARNING] Failed to enrich node {qualified_name}: {type(err).__name__}: {_sanitize_error(err)}", err=True)
             continue
+
+        response = result[2]
+        click.echo(f"[ENRICH] Processing result {i + 1}/{count}: {qualified_name}", err=True)
+
+        parsed = parse_enrichment_response(response)
+        if parsed is None:
+            click.echo(f"[WARNING] Malformed JSON for node {qualified_name}, skipping.", err=True)
+            continue
+
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "UPDATE nodes SET semantic_summary = ?, domain_tags = ?, inferred_responsibility = ?, enriched_at = ?, enrichment_model = ? WHERE id = ?",
+            (parsed["semantic_summary"], parsed["domain_tags"], parsed["inferred_responsibility"], now, model, node_id),
+        )
+        enriched_count += 1
+        if enriched_count % _COMMIT_BATCH_SIZE == 0:
+            conn.commit()
 
     # Final commit for any remaining uncommitted enrichments
     if enriched_count % _COMMIT_BATCH_SIZE != 0:
         conn.commit()
 
-    # Rebuild FTS5 after all enrichments
+    # Rebuild FTS5 after all enrichments (consistency check)
     if enriched_count > 0:
         _rebuild_fts(conn)
         conn.commit()
@@ -370,6 +407,254 @@ def enrich_nodes(conn: sqlite3.Connection, model=None, dry_run=False, provider=N
     if remaining > 0:
         return 1
     return 0
+
+
+DIRECTORY_SUMMARY_PROMPT = """\
+You are a code documentation assistant. Summarize what this directory/module does.
+
+Directory: {dir_path}
+
+Contents:
+{contents}
+
+Respond in JSON only:
+{{
+  "summary": "2-3 sentences describing what this directory/module is responsible for.",
+  "domain_tags": ["tag1", "tag2"],
+  "responsibility": "Single sentence: the role of this directory in the broader system."
+}}"""
+
+
+def _parse_dir_enrichment_response(response):
+    """Parse directory enrichment JSON response. Returns dict or None on failure."""
+    try:
+        text = response.strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines)
+
+        data = json.loads(text)
+        if not isinstance(data, dict):
+            return None
+        if "summary" not in data or "domain_tags" not in data or "responsibility" not in data:
+            return None
+        if not isinstance(data["domain_tags"], list):
+            return None
+        return {
+            "summary": str(data["summary"]),
+            "domain_tags": json.dumps(data["domain_tags"]),
+            "responsibility": str(data["responsibility"]),
+        }
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return None
+
+
+def _needs_dir_enrichment(conn, dir_path):
+    """Check if a directory needs (re-)enrichment."""
+    row = conn.execute(
+        "SELECT enriched_at FROM directory_summaries WHERE dir_path = ?", (dir_path,)
+    ).fetchone()
+    if row is None:
+        return True
+    dir_enriched_at = row[0]
+    if dir_enriched_at is None:
+        return True
+    # Check if any child node has been enriched more recently
+    # Match files directly in this dir (not subdirs)
+    if dir_path == ".":
+        # Top-level: files with no directory separator
+        child_newer = conn.execute(
+            "SELECT COUNT(*) FROM nodes WHERE file_path NOT LIKE '%/%' AND enriched_at IS NOT NULL AND enriched_at > ?",
+            (dir_enriched_at,),
+        ).fetchone()[0]
+    else:
+        # Files directly in this dir: file_path starts with dir_path/ but has no additional /
+        pattern = dir_path + "/%"
+        child_newer = conn.execute(
+            "SELECT COUNT(*) FROM nodes WHERE file_path LIKE ? AND file_path NOT LIKE ? AND enriched_at IS NOT NULL AND enriched_at > ?",
+            (pattern, dir_path + "/%/%", dir_enriched_at),
+        ).fetchone()[0]
+    return child_newer > 0
+
+
+def _gather_dir_contents(conn, dir_path):
+    """Gather content descriptions for a directory's direct children."""
+    parts = []
+
+    # Direct child nodes (files in this exact directory, not subdirectories)
+    if dir_path == ".":
+        child_nodes = conn.execute(
+            "SELECT qualified_name, semantic_summary, domain_tags FROM nodes "
+            "WHERE file_path NOT LIKE '%/%' AND enriched_at IS NOT NULL"
+        ).fetchall()
+    else:
+        pattern = dir_path + "/%"
+        child_nodes = conn.execute(
+            "SELECT qualified_name, semantic_summary, domain_tags FROM nodes "
+            "WHERE file_path LIKE ? AND file_path NOT LIKE ? AND enriched_at IS NOT NULL",
+            (pattern, dir_path + "/%/%"),
+        ).fetchall()
+
+    for qname, summary, tags in child_nodes:
+        parts.append(f"- {qname}: {summary or 'no summary'} (tags: {tags or '[]'})")
+
+    # Child directory summaries (already computed since we go bottom-up)
+    if dir_path == ".":
+        # Top-level dirs: those with no / in dir_path (except '.' itself)
+        child_dirs = conn.execute(
+            "SELECT dir_path, summary, domain_tags FROM directory_summaries "
+            "WHERE dir_path != '.' AND dir_path NOT LIKE '%/%'"
+        ).fetchall()
+    else:
+        pattern = dir_path + "/%"
+        child_dirs = conn.execute(
+            "SELECT dir_path, summary, domain_tags FROM directory_summaries "
+            "WHERE dir_path LIKE ? AND dir_path NOT LIKE ?",
+            (pattern, dir_path + "/%/%"),
+        ).fetchall()
+
+    for dpath, summary, tags in child_dirs:
+        parts.append(f"- [dir] {dpath}: {summary or 'no summary'} (tags: {tags or '[]'})")
+
+    return "\n".join(parts) if parts else "(empty directory)"
+
+
+async def _enrich_dir_async(semaphore, dir_path, conn, model, provider):
+    """Enrich a single directory asynchronously."""
+    async with semaphore:
+        contents = _gather_dir_contents(conn, dir_path)
+        prompt = DIRECTORY_SUMMARY_PROMPT.format(dir_path=dir_path, contents=contents)
+        response = await asyncio.to_thread(call_llm, prompt, model, provider=provider)
+        return (dir_path, response, contents, "ok")
+
+
+def enrich_directories(conn, model=None, provider=None, concurrency=5):
+    """Enrich directories with LLM-generated summaries, bottom-up.
+
+    Generates summaries for each directory containing enriched nodes,
+    then creates a project-level summary from top-level directory summaries.
+    """
+    provider, model = _resolve_provider_and_model(provider, model)
+
+    # Check API key
+    env_key = _PROVIDER_ENV_KEYS.get(provider, "OPENAI_API_KEY")
+    api_key = os.environ.get(env_key)
+    if not api_key and provider != "litellm":
+        click.echo(f"[ERROR] {env_key} not set.", err=True)
+        sys.exit(2)
+    if provider == "litellm" and not api_key and not os.environ.get("LITELLM_BASE_URL"):
+        click.echo("[ERROR] LITELLM_API_KEY or LITELLM_BASE_URL not set.", err=True)
+        sys.exit(2)
+
+    # Ensure directory_summaries table exists (migration may not have run in test fixtures)
+    try:
+        conn.execute("SELECT 1 FROM directory_summaries LIMIT 0")
+    except sqlite3.OperationalError:
+        click.echo("[WARNING] directory_summaries table not found, skipping directory enrichment.", err=True)
+        return
+
+    # Collect all unique directory paths from enriched nodes
+    rows = conn.execute(
+        "SELECT DISTINCT file_path FROM nodes WHERE enriched_at IS NOT NULL"
+    ).fetchall()
+
+    dir_set = set()
+    for (file_path,) in rows:
+        d = os.path.dirname(file_path)
+        while d:
+            dir_set.add(d)
+            d = os.path.dirname(d)
+    # Always include project root
+    dir_set.add(".")
+
+    if not dir_set:
+        click.echo("[DIR-ENRICH] No directories to enrich.", err=True)
+        return
+
+    # Sort bottom-up: deepest directories first
+    dirs_sorted = sorted(dir_set, key=lambda p: p.count("/"), reverse=True)
+
+    # Filter to those needing enrichment
+    dirs_to_enrich = [d for d in dirs_sorted if d != "." and _needs_dir_enrichment(conn, d)]
+
+    click.echo(f"[DIR-ENRICH] {len(dirs_to_enrich)} directories to enrich (provider={provider}, model={model}).", err=True)
+
+    # Enrich directories bottom-up (sequential by depth level to ensure child summaries are available)
+    # Group by depth
+    if dirs_to_enrich:
+        depth_groups = {}
+        for d in dirs_to_enrich:
+            depth = d.count("/")
+            depth_groups.setdefault(depth, []).append(d)
+
+        for depth in sorted(depth_groups.keys(), reverse=True):
+            group = depth_groups[depth]
+
+            async def _enrich_group(group_dirs):
+                semaphore = asyncio.Semaphore(concurrency)
+                tasks = []
+                for d in group_dirs:
+                    tasks.append(_enrich_dir_async(semaphore, d, conn, model, provider))
+                return await asyncio.gather(*tasks, return_exceptions=True)
+
+            results = asyncio.run(_enrich_group(group))
+
+            for result in results:
+                if isinstance(result, Exception):
+                    click.echo(f"[WARNING] Directory enrichment failed: {_sanitize_error(result)}", err=True)
+                    continue
+
+                dir_path, response, contents, status = result
+                parsed = _parse_dir_enrichment_response(response)
+                if parsed is None:
+                    click.echo(f"[WARNING] Malformed JSON for directory {dir_path}, skipping.", err=True)
+                    continue
+
+                now = datetime.now(timezone.utc).isoformat()
+                # Count direct children (nodes + child dirs)
+                child_count = contents.count("\n") + 1 if contents != "(empty directory)" else 0
+
+                conn.execute(
+                    "INSERT OR REPLACE INTO directory_summaries "
+                    "(dir_path, summary, domain_tags, responsibility, child_count, enriched_at, enrichment_model) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (dir_path, parsed["summary"], parsed["domain_tags"], parsed["responsibility"],
+                     child_count, now, model),
+                )
+                click.echo(f"[DIR-ENRICH] Enriched: {dir_path}", err=True)
+
+            conn.commit()
+
+    # Project-level summary (dir_path = '.')
+    if _needs_dir_enrichment(conn, "."):
+        click.echo("[DIR-ENRICH] Generating project-level summary...", err=True)
+        contents = _gather_dir_contents(conn, ".")
+        if contents != "(empty directory)":
+            prompt = DIRECTORY_SUMMARY_PROMPT.format(dir_path=".", contents=contents)
+            try:
+                response = call_llm(prompt, model, provider=provider)
+                parsed = _parse_dir_enrichment_response(response)
+                if parsed:
+                    now = datetime.now(timezone.utc).isoformat()
+                    child_count = contents.count("\n") + 1
+                    conn.execute(
+                        "INSERT OR REPLACE INTO directory_summaries "
+                        "(dir_path, summary, domain_tags, responsibility, child_count, enriched_at, enrichment_model) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (".", parsed["summary"], parsed["domain_tags"], parsed["responsibility"],
+                         child_count, now, model),
+                    )
+                    conn.commit()
+                    click.echo("[DIR-ENRICH] Project summary generated.", err=True)
+                else:
+                    click.echo("[WARNING] Malformed JSON for project summary.", err=True)
+            except Exception as e:
+                click.echo(f"[WARNING] Project summary failed: {_sanitize_error(e)}", err=True)
+        else:
+            click.echo("[DIR-ENRICH] No content for project summary.", err=True)
 
 
 def _update_meta(conn: sqlite3.Connection):
