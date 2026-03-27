@@ -430,6 +430,11 @@ class TestResolveProviderAndModel:
         finally:
             os.environ.pop("LITELLM_BASE_URL", None)
 
+    def test_explicit_ollama_provider(self):
+        provider, model = _resolve_provider_and_model("ollama", None)
+        assert provider == "ollama"
+        assert model == DEFAULT_MODELS["ollama"]
+
     def test_anthropic_takes_priority(self):
         os.environ["ANTHROPIC_API_KEY"] = "test"
         os.environ["OPENAI_API_KEY"] = "test"

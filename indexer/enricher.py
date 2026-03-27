@@ -20,7 +20,7 @@ __all__ = ["enrich_nodes", "enrich_directories", "enrich_files", "call_llm", "pa
 
 logger = logging.getLogger(__name__)
 
-PROVIDERS = ("anthropic", "openai", "openrouter", "litellm")
+PROVIDERS = ("anthropic", "openai", "openrouter", "litellm", "ollama")
 
 DEFAULT_PROVIDER = "litellm"
 
@@ -29,6 +29,7 @@ DEFAULT_MODELS = {
     "openai": "gpt-4o",
     "openrouter": "anthropic/claude-sonnet-4-6",
     "litellm": "gemini-2.5-flash-lite",
+    "ollama": "qwen2.5:32b",
 }
 
 _PROVIDER_ENV_KEYS = {
@@ -36,17 +37,19 @@ _PROVIDER_ENV_KEYS = {
     "openai": "OPENAI_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
     "litellm": "LITELLM_API_KEY",
+    "ollama": "OLLAMA_API_KEY",
 }
 
 _PROVIDER_BASE_URLS = {
     "openrouter": "https://openrouter.ai/api/v1",
+    "ollama": "http://localhost:11434/v1",
 }
 
 
 def _sanitize_error(e: Exception) -> str:
     """Redact API keys from exception messages to prevent accidental leakage."""
     err_msg = str(e)
-    for env_var in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "LITELLM_API_KEY"):
+    for env_var in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "LITELLM_API_KEY", "OLLAMA_API_KEY"):
         key_val = os.environ.get(env_var, "")
         if key_val and key_val in err_msg:
             err_msg = err_msg.replace(key_val, "***")
@@ -247,6 +250,10 @@ def call_llm(prompt, model, provider=None, system_prompt=None):
                 base_url = _PROVIDER_BASE_URLS.get(provider)
                 if provider == "litellm":
                     base_url = os.environ.get("LITELLM_BASE_URL", "http://localhost:4000/v1")
+                elif provider == "ollama":
+                    base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+                    if not api_key:
+                        api_key = "ollama"
                 return _call_openai_compat(prompt, model, api_key=api_key, base_url=base_url, system_prompt=system_prompt)
         except _retryable_exceptions(provider) as e:
             if attempt < max_attempts - 1:
@@ -413,7 +420,7 @@ def enrich_nodes(conn: sqlite3.Connection, model=None, dry_run=False, provider=N
     if not dry_run:
         env_key = _PROVIDER_ENV_KEYS.get(provider, "OPENAI_API_KEY")
         api_key = os.environ.get(env_key)
-        if not api_key and provider != "litellm":
+        if not api_key and provider not in ("litellm", "ollama"):
             click.echo(f"[ERROR] {env_key} not set.", err=True)
             sys.exit(2)
         if provider == "litellm" and not api_key and not os.environ.get("LITELLM_BASE_URL"):
@@ -535,7 +542,7 @@ def enrich_files(conn, model=None, provider=None, concurrency=10):
     # Check API key
     env_key = _PROVIDER_ENV_KEYS.get(provider, "OPENAI_API_KEY")
     api_key = os.environ.get(env_key)
-    if not api_key and provider != "litellm":
+    if not api_key and provider not in ("litellm", "ollama"):
         click.echo(f"[ERROR] {env_key} not set.", err=True)
         sys.exit(2)
     if provider == "litellm" and not api_key and not os.environ.get("LITELLM_BASE_URL"):
@@ -757,7 +764,7 @@ def enrich_directories(conn, model=None, provider=None, concurrency=10):
     # Check API key
     env_key = _PROVIDER_ENV_KEYS.get(provider, "OPENAI_API_KEY")
     api_key = os.environ.get(env_key)
-    if not api_key and provider != "litellm":
+    if not api_key and provider not in ("litellm", "ollama"):
         click.echo(f"[ERROR] {env_key} not set.", err=True)
         sys.exit(2)
     if provider == "litellm" and not api_key and not os.environ.get("LITELLM_BASE_URL"):
