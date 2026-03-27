@@ -259,7 +259,7 @@ class TestCallerReResolution:
 
         def mock_rg_run(args, **kwargs):
             call_count[0] += 1
-            identifier = args[3]  # The identifier being searched
+            identifier = args[5]  # The identifier being searched
             mock_result = MagicMock()
             if identifier == "bar":
                 # bar is found in a.py line 3
@@ -297,4 +297,4 @@ class TestCallerReResolution:
             "SELECT source_id, target_id, edge_type FROM edges"
         ).fetchall()
         # There should be edges present after re-resolution
-        assert len(edges) >= 0  # At minimum, the process ran without error
+        assert len(edges) > 0, "Expected edges after caller re-resolution"

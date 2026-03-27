@@ -15,14 +15,23 @@ from unittest.mock import patch
 import pytest
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
-RG_PATH = "/Users/kjackowski/.factory/bin/rg"
+RG_PATH = shutil.which("rg")
+
+
+def _env_with_rg() -> dict:
+    """Return env dict with ripgrep's directory on PATH."""
+    env = os.environ.copy()
+    rg = shutil.which("rg")
+    if rg:
+        rg_dir = str(Path(rg).parent)
+        if rg_dir not in env.get("PATH", ""):
+            env["PATH"] = f"{rg_dir}:{env['PATH']}"
+    return env
 
 
 def _run_build(cwd: str, *extra_args: str, env_override: dict | None = None) -> subprocess.CompletedProcess:
     """Run `index build` in the given directory, capturing stdout/stderr separately."""
-    env = os.environ.copy()
-    # Ensure rg is on PATH
-    env["PATH"] = f"/Users/kjackowski/.factory/bin:{env['PATH']}"
+    env = _env_with_rg()
     if env_override:
         env.update(env_override)
     return subprocess.run(

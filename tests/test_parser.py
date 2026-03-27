@@ -243,6 +243,210 @@ class TestCASTChunking:
             assert child["qualified_name"].startswith("oversized_function.")
 
 
+class TestMultiLanguageChunking:
+    """Test cAST chunking for non-Python tree-sitter languages."""
+
+    # -- Kotlin chunking tests --
+
+    def test_kotlin_function_chunked(self, db_conn, tmp_path):
+        from indexer.parser import parse_file
+
+        kt_source = textwrap.dedent("""\
+            fun bigFunction(x: Int): Int {
+                val a = x + 1
+                val b = a * 2
+                val c = b - 3
+                val d = c / 4
+                val e = d + 5
+                val f = e * 6
+                val g = f - 7
+                val h = g + 8
+                val i = h * 9
+                val j = i - 10
+                return j
+            }
+        """)
+        kt_file = tmp_path / "Big.kt"
+        kt_file.write_text(kt_source)
+
+        nodes = parse_file(kt_file, db_conn, repo_root=tmp_path, token_limit=30)
+
+        big_nodes = [
+            n for n in nodes
+            if "bigFunction" in n.get("qualified_name", "")
+        ]
+        assert len(big_nodes) >= 2, (
+            f"Expected chunked nodes for bigFunction, got {len(big_nodes)}: "
+            f"{[n['qualified_name'] for n in big_nodes]}"
+        )
+        parent = [n for n in big_nodes if n["qualified_name"] == "bigFunction"]
+        assert len(parent) == 1
+        children = [n for n in big_nodes if n["qualified_name"] != "bigFunction"]
+        assert len(children) >= 1
+        for child in children:
+            assert child["qualified_name"].startswith("bigFunction.chunk_")
+
+    def test_typescript_function_chunked(self, db_conn, tmp_path):
+        from indexer.parser import parse_file
+
+        ts_source = textwrap.dedent("""\
+            function bigFunction(x: number): number {
+                const a = x + 1;
+                const b = a * 2;
+                const c = b - 3;
+                const d = c / 4;
+                const e = d + 5;
+                const f = e * 6;
+                const g = f - 7;
+                const h = g + 8;
+                const i = h * 9;
+                const j = i - 10;
+                return j;
+            }
+        """)
+        ts_file = tmp_path / "big.ts"
+        ts_file.write_text(ts_source)
+
+        nodes = parse_file(ts_file, db_conn, repo_root=tmp_path, token_limit=30)
+
+        big_nodes = [
+            n for n in nodes
+            if "bigFunction" in n.get("qualified_name", "")
+        ]
+        assert len(big_nodes) >= 2, (
+            f"Expected chunked nodes for bigFunction, got {len(big_nodes)}: "
+            f"{[n['qualified_name'] for n in big_nodes]}"
+        )
+        parent = [n for n in big_nodes if n["qualified_name"] == "bigFunction"]
+        assert len(parent) == 1
+        children = [n for n in big_nodes if n["qualified_name"] != "bigFunction"]
+        assert len(children) >= 1
+        for child in children:
+            assert child["qualified_name"].startswith("bigFunction.chunk_")
+
+    def test_java_method_chunked(self, db_conn, tmp_path):
+        from indexer.parser import parse_file
+
+        java_source = textwrap.dedent("""\
+            public class BigService {
+                public int bigMethod(int x) {
+                    int a = x + 1;
+                    int b = a * 2;
+                    int c = b - 3;
+                    int d = c / 4;
+                    int e = d + 5;
+                    int f = e * 6;
+                    int g = f - 7;
+                    int h = g + 8;
+                    int i = h * 9;
+                    int j = i - 10;
+                    return j;
+                }
+            }
+        """)
+        java_file = tmp_path / "BigService.java"
+        java_file.write_text(java_source)
+
+        nodes = parse_file(java_file, db_conn, repo_root=tmp_path, token_limit=30)
+
+        big_nodes = [
+            n for n in nodes
+            if "bigMethod" in n.get("qualified_name", "")
+        ]
+        assert len(big_nodes) >= 2, (
+            f"Expected chunked nodes for bigMethod, got {len(big_nodes)}: "
+            f"{[n['qualified_name'] for n in big_nodes]}"
+        )
+        parent = [n for n in big_nodes if n["qualified_name"] == "BigService.bigMethod"]
+        assert len(parent) == 1
+        children = [n for n in big_nodes if n["qualified_name"] != "BigService.bigMethod"]
+        assert len(children) >= 1
+        for child in children:
+            assert child["qualified_name"].startswith("BigService.bigMethod.chunk_")
+
+    def test_ruby_method_chunked(self, db_conn, tmp_path):
+        from indexer.parser import parse_file
+
+        rb_source = textwrap.dedent("""\
+            class BigService
+              def big_method(x)
+                a = x + 1
+                b = a * 2
+                c = b - 3
+                d = c / 4
+                e = d + 5
+                f = e * 6
+                g = f - 7
+                h = g + 8
+                i = h * 9
+                j = i - 10
+                j
+              end
+            end
+        """)
+        rb_file = tmp_path / "big_service.rb"
+        rb_file.write_text(rb_source)
+
+        nodes = parse_file(rb_file, db_conn, repo_root=tmp_path, token_limit=30)
+
+        big_nodes = [
+            n for n in nodes
+            if "big_method" in n.get("qualified_name", "")
+        ]
+        assert len(big_nodes) >= 2, (
+            f"Expected chunked nodes for big_method, got {len(big_nodes)}: "
+            f"{[n['qualified_name'] for n in big_nodes]}"
+        )
+        parent = [n for n in big_nodes if n["qualified_name"] == "BigService.big_method"]
+        assert len(parent) == 1
+        children = [n for n in big_nodes if n["qualified_name"] != "BigService.big_method"]
+        assert len(children) >= 1
+        for child in children:
+            assert child["qualified_name"].startswith("BigService.big_method.chunk_")
+
+    # -- Small functions should NOT be chunked --
+
+    def test_kotlin_small_function_not_chunked(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_KT, db_conn, repo_root=FIXTURES_DIR.parent.parent, token_limit=2000)
+
+        for node in nodes:
+            assert "chunk_" not in node.get("qualified_name", ""), (
+                f"Unexpected chunk node: {node['qualified_name']}"
+            )
+
+    def test_typescript_small_function_not_chunked(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_TS, db_conn, repo_root=FIXTURES_DIR.parent.parent, token_limit=2000)
+
+        for node in nodes:
+            assert "chunk_" not in node.get("qualified_name", ""), (
+                f"Unexpected chunk node: {node['qualified_name']}"
+            )
+
+    def test_java_small_function_not_chunked(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_JAVA, db_conn, repo_root=FIXTURES_DIR.parent.parent, token_limit=2000)
+
+        for node in nodes:
+            assert "chunk_" not in node.get("qualified_name", ""), (
+                f"Unexpected chunk node: {node['qualified_name']}"
+            )
+
+    def test_ruby_small_function_not_chunked(self, db_conn):
+        from indexer.parser import parse_file
+
+        nodes = parse_file(SAMPLE_RB, db_conn, repo_root=FIXTURES_DIR.parent.parent, token_limit=2000)
+
+        for node in nodes:
+            assert "chunk_" not in node.get("qualified_name", ""), (
+                f"Unexpected chunk node: {node['qualified_name']}"
+            )
+
+
 class TestGitignoreExclusion:
     """Test that files matching .gitignore patterns are excluded."""
 

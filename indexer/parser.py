@@ -997,7 +997,7 @@ def _chunk_treesitter_node(
     # Find the body/block child
     body_node = None
     for child in ts_node.children:
-        if child.type in ("function_body", "statement_block", "block"):
+        if child.type in ("function_body", "statement_block", "block", "body_statement"):
             body_node = child
             break
     if body_node is None:

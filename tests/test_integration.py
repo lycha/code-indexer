@@ -20,10 +20,20 @@ import pytest
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
+def _env_with_rg() -> dict:
+    """Return env dict with ripgrep's directory on PATH."""
+    env = os.environ.copy()
+    rg = shutil.which("rg")
+    if rg:
+        rg_dir = str(Path(rg).parent)
+        if rg_dir not in env.get("PATH", ""):
+            env["PATH"] = f"{rg_dir}:{env['PATH']}"
+    return env
+
+
 def _run_cmd(*args: str, cwd: str, env_override: dict | None = None) -> subprocess.CompletedProcess:
     """Run an ``index`` sub-command via ``python -m indexer``."""
-    env = os.environ.copy()
-    env["PATH"] = f"/Users/kjackowski/.factory/bin:{env['PATH']}"
+    env = _env_with_rg()
     if env_override:
         env.update(env_override)
     return subprocess.run(
